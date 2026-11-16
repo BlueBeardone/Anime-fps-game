@@ -8,13 +8,36 @@ using UnityEngine.TestTools;
 namespace AnimeFpsGame.Tests
 {
     /// <summary>
-    /// Headless smoke test: the Main scene hosts, NGO spawns the player prefab, and the weapon
-    /// slot network variable changes when the owner asks for the pistol.
+    /// Headless smoke tests: loading Main starts a solo local session, NGO spawns the player prefab,
+    /// and the weapon slot network variable changes when the owner asks for the pistol.
     /// </summary>
     public class PlayerSmokeTests
     {
+        /// <summary>
+        /// NGO marks NetworkManager DontDestroyOnLoad, so it survives the next LoadScene in the same
+        /// PlayMode run. Destroy it between tests or the next test reuses a shut-down singleton.
+        /// </summary>
+        [UnityTearDown]
+        public IEnumerator TearDownNetwork()
+        {
+            var manager = NetworkManager.Singleton;
+            if (manager != null)
+            {
+                manager.Shutdown();
+            }
+
+            yield return null;
+
+            if (manager != null)
+            {
+                Object.Destroy(manager.gameObject);
+            }
+
+            yield return null;
+        }
+
         [UnityTest]
-        public IEnumerator HostSpawnsAPlayerAndSwapsToThePistol()
+        public IEnumerator RangeSpawnsAPlayerAndSwapsToThePistol()
         {
             SceneManager.LoadScene("Main");
             yield return null;
@@ -24,8 +47,12 @@ namespace AnimeFpsGame.Tests
 
             var bootstrap = Object.FindAnyObjectByType<Networking.NetworkBootstrap>();
             Assert.IsNotNull(bootstrap, "NetworkBootstrap must be on the NetworkManager");
-
-            bootstrap.Host();
+            var connectDeadline = Time.realtimeSinceStartup + 5f;
+            while (!bootstrap.IsConnected && Time.realtimeSinceStartup < connectDeadline)
+            {
+                yield return null;
+            }
+            Assert.IsTrue(bootstrap.IsConnected, "Main must auto-start a solo host");
 
             var weapons = default(Player.PlayerWeapons);
             var deadline = Time.realtimeSinceStartup + 15f;
@@ -47,9 +74,35 @@ namespace AnimeFpsGame.Tests
             Assert.AreEqual(1, weapons.CurrentSlot, "Owner can switch to weapon slot 1 (Luger)");
             Assert.IsNotNull(weapons.CurrentViewmodel, "Switching to the pistol instantiates its viewmodel");
             StringAssert.Contains("Luger", weapons.CurrentViewmodel.name, "Luger viewmodel is the one shown");
+        }
 
-            NetworkManager.Singleton.Shutdown();
+        [UnityTest]
+        public IEnumerator MainSceneAutoHostsWithoutHostJoinMenu()
+        {
+            SceneManager.LoadScene("Main");
             yield return null;
+            yield return null;
+
+            Assert.IsNull(Object.FindAnyObjectByType<AnimeFpsGame.Networking.HostJoinMenu>(),
+                "The Range must not show the host/join panel");
+            var bootstrap = Object.FindAnyObjectByType<AnimeFpsGame.Networking.NetworkBootstrap>();
+            Assert.IsNotNull(bootstrap, "Main scene must contain a NetworkBootstrap");
+            var connectDeadline = Time.realtimeSinceStartup + 5f;
+            while (!bootstrap.IsConnected && Time.realtimeSinceStartup < connectDeadline)
+            {
+                yield return null;
+            }
+            Assert.IsTrue(bootstrap.IsConnected, "Main must auto-start a solo host");
+
+            var deadline = Time.realtimeSinceStartup + 10f;
+            while (Object.FindAnyObjectByType<AnimeFpsGame.Player.PlayerWeapons>() == null &&
+                   Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.IsNotNull(Object.FindAnyObjectByType<AnimeFpsGame.Player.PlayerWeapons>(),
+                "Solo host must spawn the player");
         }
     }
 }

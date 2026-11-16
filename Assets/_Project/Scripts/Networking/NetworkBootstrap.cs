@@ -12,6 +12,7 @@ namespace AnimeFpsGame.Networking
         [SerializeField] ushort port = 7777;
         [SerializeField] string listenAddress = "0.0.0.0";
         [SerializeField] Transform[] spawnPoints;
+        [SerializeField] bool startSinglePlayer;
 
         public string Address { get; private set; }
         public string Status { get; private set; } = "Not connected";
@@ -50,11 +51,15 @@ namespace AnimeFpsGame.Networking
                 }
             }
 
-            ApplyCommandLine();
+            var sessionStarted = ApplyCommandLine();
+            if (startSinglePlayer && !sessionStarted && !IsConnected)
+            {
+                Host();
+            }
         }
 
         /// <summary>Dev convenience: `-host` or `-join [address]` starts a session without the menu.</summary>
-        void ApplyCommandLine()
+        bool ApplyCommandLine()
         {
             var args = System.Environment.GetCommandLineArgs();
             for (var i = 0; i < args.Length; i++)
@@ -62,16 +67,18 @@ namespace AnimeFpsGame.Networking
                 if (args[i] == "-host")
                 {
                     Host();
-                    return;
+                    return true;
                 }
 
                 if (args[i] == "-join")
                 {
                     var address = i + 1 < args.Length && !args[i + 1].StartsWith("-") ? args[i + 1] : defaultAddress;
                     Join(address);
-                    return;
+                    return true;
                 }
             }
+
+            return false;
         }
 
         void OnDestroy()
@@ -121,6 +128,7 @@ namespace AnimeFpsGame.Networking
             if (!networkManager.StartHost())
             {
                 Status = "Host failed";
+                Debug.LogWarning("[Net] " + Status);
             }
         }
 

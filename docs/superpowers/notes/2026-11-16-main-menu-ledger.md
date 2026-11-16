@@ -17,5 +17,14 @@ Task 1: complete — MainMenuController + 3 PlayMode tests (`MenuBuildsTheFiveEx
 Task 2: complete — `ProjectSetup.SetupMainMenu()`, generated `MainMenu.unity`, build order
 `MainMenu` (0) / `Main` (1). Same test command after generation → Passed 5/5, exit 0.
 
+Task 3: Ruling: the PlayMode tests now destroy the DDOL `NetworkManager` in `[UnityTearDown]` — NGO marks
+it DontDestroyOnLoad, so the second test otherwise reused the first test's shut-down singleton. Test-only
+isolation; product code unchanged. Cost if wrong: a future multi-load bug stays uncovered, but
+return-to-menu is explicitly out of scope.
+Task 3: complete — `NetworkBootstrap.startSinglePlayer` auto-hosts, `HostJoinMenu` removed from `Main`,
+`Main.unity` regenerated. Command: `Unity -runTests -testFilter AnimeFpsGame.Tests.PlayerSmokeTests` →
+Passed 2/2, exit 0.
+
+
 
 

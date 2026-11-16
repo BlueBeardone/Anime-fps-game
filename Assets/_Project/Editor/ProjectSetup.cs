@@ -173,9 +173,10 @@ namespace AnimeFpsGame.EditorTools
                 managerObject.AddComponent<AnimeFpsGame.Networking.NetworkBootstrap>();
             }
 
-            if (managerObject.GetComponent<AnimeFpsGame.Networking.HostJoinMenu>() == null)
+            var legacyMenu = managerObject.GetComponent<AnimeFpsGame.Networking.HostJoinMenu>();
+            if (legacyMenu != null)
             {
-                managerObject.AddComponent<AnimeFpsGame.Networking.HostJoinMenu>();
+                Object.DestroyImmediate(legacyMenu);
             }
 
             var manager = managerObject.GetComponent<NetworkManager>();
@@ -214,6 +215,12 @@ namespace AnimeFpsGame.EditorTools
             {
                 var bootstrapSerialized = new SerializedObject(bootstrap);
                 bootstrapSerialized.FindProperty("networkManager").objectReferenceValue = manager;
+
+                var singlePlayerProperty = bootstrapSerialized.FindProperty("startSinglePlayer");
+                if (singlePlayerProperty != null)
+                {
+                    singlePlayerProperty.boolValue = true;
+                }
 
                 var spawnProperty = bootstrapSerialized.FindProperty("spawnPoints");
                 if (spawnProperty != null)
