@@ -30,8 +30,9 @@ times out, allow the game through the Windows firewall on the host.
 | Mouse | look |
 | Shift | sprint |
 | Space | jump |
-| 1 / 2, or mouse wheel | K98 rifle / Luger P08 pistol |
-| Left mouse | prints `shoot` (local) and `shoot from client N` (server log) |
+| 1 / 2, or mouse wheel | cycle all four weapons (Rifle → Handgun → SMG → Shotgun) |
+| Left mouse | fire (hold for the full-auto Rifle and SMG) |
+| R | reload |
 
 Each client spawns on its own marker (`SpawnPoint 1`–`4` in `Main.unity`); you see other players'
 soldiers, never your own body.
@@ -47,9 +48,13 @@ Assets/_Project/
   Scenes/Main.unity            ground, light, NetworkManager, solo auto-host
   Scripts/Menu/                MainMenuController
   Scripts/Player/              PlayerMotor, PlayerLook, PlayerWeapons, WeaponDefinition
+  Scripts/Weapons/             IGun/Gun, Rifle, Handgun, SMG, Shotgun, GunFactory
+  Scripts/Combat/              Health, HealthState, PlayerRespawn, TargetDummy
+  Scripts/UI/, Scripts/Effects/ WeaponHud, ShotEffects
+  Settings/Weapons/            Rifle / Handgun / SMG / Shotgun GunStatsAssets
   Scripts/Networking/          NetworkBootstrap, HostJoinMenu
   Editor/ProjectSetup.cs       one-shot generator (Anime FPS menu)
-  Tests/PlayMode/              headless host + weapon-swap smoke test
+  Tests/PlayMode/              headless tests: guns, health, player, HUD, combat
 ```
 
 `Anime FPS > Run All` rebuilds the scene, NetworkManager and player prefab from scratch
@@ -57,13 +62,24 @@ Assets/_Project/
 
 ## Weapons
 
-The soldier prefab already carries all eight guns as skinned meshes with animator ints
-(`K98_status`, `LugerP08_status`, ...). A weapon slot is four things:
+Four slots ship today: Rifle (K98), Handgun (Luger), SMG (MP40) and Shotgun (K98 placeholder).
+Each slot has a `GunStatsAsset` at `Settings/Weapons/`; tune cadence, damage, pellets, magazine,
+reserve, reload, range, bloom and pellet spread there. **`Run All` never overwrites an existing
+asset**, so Inspector edits survive regeneration. Delete an asset if you want the defaults back.
 
-- `soldierMeshName` — which child mesh to show on other players (`K98`, `Luger_P08`)
+The gun rules live in plain C# (`IGun` / `Gun`), so they are unit-tested without a scene. Each
+`PlayerWeapons` builds one gun instance per slot and keeps it for the player's lifetime, so ammo
+and reloads survive weapon switches. Ammo is owner-authoritative; **damage is server-authoritative**
+— the client reports origin and directions and the server re-raycasts, checking pellet count,
+origin distance, a 60° aim cone and cadence before touching health.
+
+A weapon slot is four things:
+
+- `soldierMeshName` — which child mesh to show on other players (`K98`, `Luger_P08`, `MP40`)
 - `animatorInt` — which animator int to set to `1`
 - `viewmodelPrefab` — what the owner holds in first person
 - viewmodel position / rotation / scale (tune these; they are placeholder values)
+- `stats` — the `GunStatsAsset` that drives that slot
 
 Add a slot in `Player.prefab` → `PlayerWeapons` → `slots` and extend the mesh-name list in
 `PlayerWeapons.cs` if you add a weapon outside the pack.
@@ -78,12 +94,13 @@ are separate prefabs, so they can be replaced independently.
 
 ## Known gaps (on purpose)
 
-- No aiming, shooting, damage, health or respawn — fire only logs.
+- No ADS, headshots, damage falloff or wall penetration. No lag compensation.
+- No shooting, impact or reload audio yet.
+- Ammo is owner-authoritative and not replicated, so another peer cannot see your magazine.
 - Main menu Campaign/Multiplayer/Settings are placeholders. Range runs a solo local host, not a true
   offline mode. There is no pause or return-to-menu yet.
 - No anime art yet; the WW2 pack is a placeholder.
 - LAN/IP only. Relay, lobbies and Accounts (Unity Multiplayer Services) are installed but unused.
 - Viewmodel placement is eyeballed and needs a tuning pass in the editor.
-- Remote weapon-swap and the shoot RPC were not exercised end-to-end (no input automation in the
-  test harness); both are standard `NetworkVariable` / `ServerRpc` paths.
-- No CI, no git repository yet.
+- The server-side shot validation is unit-covered only indirectly (the combat test drives `Health`); the two-client visual path and RPC-level validation still need a manual host + client session.
+- No CI.

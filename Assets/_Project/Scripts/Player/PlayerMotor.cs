@@ -17,6 +17,7 @@ namespace AnimeFpsGame.Player
         [SerializeField] Animator animator;
 
         CharacterController controller;
+        AnimeFpsGame.Combat.Health health;
         InputAction moveAction;
         InputAction sprintAction;
         InputAction jumpAction;
@@ -28,6 +29,7 @@ namespace AnimeFpsGame.Player
         void Awake()
         {
             controller = GetComponent<CharacterController>();
+            health = GetComponent<AnimeFpsGame.Combat.Health>();
         }
 
         public override void OnNetworkSpawn()
@@ -51,6 +53,12 @@ namespace AnimeFpsGame.Player
         {
             if (moveAction == null)
             {
+                return;
+            }
+
+            if (health != null && health.IsDead)
+            {
+                Speed = 0f;
                 return;
             }
 

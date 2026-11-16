@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using AnimeFpsGame.Combat;
+using AnimeFpsGame.Weapons;
 using Unity.Netcode;
 using Unity.Netcode.Components;
 using Unity.Netcode.Transports.UTP;
@@ -24,6 +26,7 @@ namespace AnimeFpsGame.EditorTools
         public const string SampleScenePath = ScenesDir + "/SampleScene.unity";
         public const string PlayerPrefabPath = ProjectRoot + "/Prefabs/Player/Player.prefab";
         public const string ViewsDir = ProjectRoot + "/Prefabs/Weapons";
+        public const string StatsDir = ProjectRoot + "/Settings/Weapons";
         public const string ActionsPath = "Assets/InputSystem_Actions.inputactions";
 
         const string SoldiersDir = ProjectRoot + "/Art/WW2_German_Soldiers";
@@ -81,6 +84,8 @@ namespace AnimeFpsGame.EditorTools
                     spawn.transform.position = SpawnPositions[i];
                 }
             }
+
+            EnsureTargetDummies();
 
             EditorSceneManager.SaveScene(scene, MainScenePath);
             if (hasSample)
@@ -268,6 +273,13 @@ namespace AnimeFpsGame.EditorTools
 
             var k98Viewmodel = EnsureViewmodel("K98_prefab.prefab", "K98_Viewmodel.prefab");
             var lugerViewmodel = EnsureViewmodel("LugerP08_prefab.prefab", "LugerP08_Viewmodel.prefab");
+            var mp40Viewmodel = EnsureViewmodel("MP40_prefab.prefab", "MP40_Viewmodel.prefab");
+
+            var rifleStats = EnsureGunStatsAsset("Rifle", Rifle.CreateDefaultStats());
+            var handgunStats = EnsureGunStatsAsset("Handgun", Handgun.CreateDefaultStats());
+            var smgStats = EnsureGunStatsAsset("SMG", SubmachineGun.CreateDefaultStats());
+            var shotgunStats = EnsureGunStatsAsset("Shotgun", Shotgun.CreateDefaultStats());
+            EnsureReloadAction();
 
             var root = new GameObject("Player");
             var controller = root.AddComponent<CharacterController>();
@@ -325,18 +337,32 @@ namespace AnimeFpsGame.EditorTools
             SetReference(look, "cameraPivot", pivot.transform);
 
             var weapons = root.AddComponent<AnimeFpsGame.Player.PlayerWeapons>();
+            var health = root.AddComponent<Health>();
+            var effects = root.AddComponent<AnimeFpsGame.Effects.ShotEffects>();
+            root.AddComponent<AnimeFpsGame.UI.WeaponHud>();
             SetReference(weapons, "viewmodelAnchor", viewmodelAnchor.transform);
             SetReference(weapons, "visualsRoot", visuals.transform);
             SetReference(weapons, "animator", animator);
             SetReference(weapons, "viewCamera", cameraComponent);
+            SetReference(weapons, "health", health);
+            SetReference(weapons, "effects", effects);
+
+            var respawn = root.AddComponent<PlayerRespawn>();
+            SetReference(respawn, "health", health);
+            SetReference(respawn, "weapons", weapons);
+            SetReference(respawn, "controller", controller);
 
             var weaponsSerialized = new SerializedObject(weapons);
             var slots = weaponsSerialized.FindProperty("slots");
-            slots.arraySize = 2;
-            ConfigureSlot(slots.GetArrayElementAtIndex(0), "K98", "status_k98", "K98", k98Viewmodel,
-                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.08f);
-            ConfigureSlot(slots.GetArrayElementAtIndex(1), "Luger P08", "Status_LugerP08", "Luger_P08", lugerViewmodel,
-                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 90f, 0f), 0.08f);
+            slots.arraySize = 4;
+            ConfigureSlot(slots.GetArrayElementAtIndex(0), "Rifle", "status_k98", "K98", k98Viewmodel,
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.08f, rifleStats);
+            ConfigureSlot(slots.GetArrayElementAtIndex(1), "Handgun", "Status_LugerP08", "Luger_P08", lugerViewmodel,
+                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 90f, 0f), 0.08f, handgunStats);
+            ConfigureSlot(slots.GetArrayElementAtIndex(2), "SMG", "status_MP40", "MP40", mp40Viewmodel,
+                new Vector3(0.22f, -0.2f, 0.45f), new Vector3(0f, 90f, 0f), 0.08f, smgStats);
+            ConfigureSlot(slots.GetArrayElementAtIndex(3), "Shotgun", "status_k98", "K98", k98Viewmodel,
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.08f, shotgunStats);
             weaponsSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
@@ -362,7 +388,8 @@ namespace AnimeFpsGame.EditorTools
         }
 
         static void ConfigureSlot(SerializedProperty slot, string displayName, string animatorInt,
-            string meshName, GameObject viewmodel, Vector3 position, Vector3 euler, float scale)
+            string meshName, GameObject viewmodel, Vector3 position, Vector3 euler, float scale,
+            GunStatsAsset stats)
         {
             slot.FindPropertyRelative("displayName").stringValue = displayName;
             slot.FindPropertyRelative("animatorInt").stringValue = animatorInt;
@@ -371,6 +398,53 @@ namespace AnimeFpsGame.EditorTools
             slot.FindPropertyRelative("viewmodelLocalPosition").vector3Value = position;
             slot.FindPropertyRelative("viewmodelLocalEuler").vector3Value = euler;
             slot.FindPropertyRelative("viewmodelScale").floatValue = scale;
+            slot.FindPropertyRelative("stats").objectReferenceValue = stats;
+        }
+
+        static GunStatsAsset EnsureGunStatsAsset(string fileName, GunStats defaults)
+        {
+            EnsureFolder(StatsDir);
+            var path = StatsDir + "/" + fileName + ".asset";
+            var existing = AssetDatabase.LoadAssetAtPath<GunStatsAsset>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var asset = ScriptableObject.CreateInstance<GunStatsAsset>();
+            asset.stats = defaults;
+            AssetDatabase.CreateAsset(asset, path);
+            AssetDatabase.SaveAssets();
+            return asset;
+        }
+
+        static void EnsureReloadAction()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(ActionsPath);
+            if (asset == null)
+            {
+                Debug.LogWarning("[ProjectSetup] Input actions asset not found: " + ActionsPath);
+                return;
+            }
+
+            var map = asset.FindActionMap("Player", false);
+            if (map == null || map.FindAction("Reload", false) != null)
+            {
+                return;
+            }
+
+            // PlayerInput components can leave the imported asset enabled while the scene is open.
+            var wasEnabled = asset.enabled;
+            asset.Disable();
+            var action = map.AddAction("Reload", InputActionType.Button);
+            action.AddBinding("<Keyboard>/r");
+            action.AddBinding("<Gamepad>/dpad/down");
+            EditorUtility.SetDirty(asset);
+            AssetDatabase.SaveAssets();
+            if (wasEnabled)
+            {
+                asset.Enable();
+            }
         }
 
         static void SetReference(Object target, string fieldName, Object value)
@@ -381,6 +455,67 @@ namespace AnimeFpsGame.EditorTools
             {
                 property.objectReferenceValue = value;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>
+        /// Three networked practice targets. Scene NetworkObjects, so the server spawns them when
+        /// the host starts; ignoreOwnerDamage is off because the server owns the dummy itself.
+        /// </summary>
+        static void EnsureTargetDummies()
+        {
+            var material = EnsureMaterial(ProjectRoot + "/Art/Materials/TargetDummy.mat",
+                new Color(0.72f, 0.18f, 0.15f));
+
+            var positions = new[]
+            {
+                new Vector3(0f, 1f, 8f),
+                new Vector3(-3f, 1f, 10f),
+                new Vector3(3f, 1f, 10f)
+            };
+
+            for (var i = 0; i < positions.Length; i++)
+            {
+                var name = "TargetDummy " + (i + 1);
+                var dummy = GameObject.Find(name);
+                if (dummy == null)
+                {
+                    dummy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    dummy.name = name;
+                    dummy.transform.position = positions[i];
+                }
+                else
+                {
+                    // Existing dummies keep any hand tuning from the editor.
+                    dummy.name = name;
+                }
+
+                var renderer = dummy.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                {
+                    renderer.sharedMaterial = material;
+                }
+
+                if (dummy.GetComponent<NetworkObject>() == null)
+                {
+                    dummy.AddComponent<NetworkObject>();
+                }
+
+                var health = dummy.GetComponent<Health>();
+                if (health == null)
+                {
+                    health = dummy.AddComponent<Health>();
+                }
+
+                var healthSerialized = new SerializedObject(health);
+                healthSerialized.FindProperty("maxHealth").floatValue = 100f;
+                healthSerialized.FindProperty("ignoreOwnerDamage").boolValue = false;
+                healthSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+                if (dummy.GetComponent<TargetDummy>() == null)
+                {
+                    dummy.AddComponent<TargetDummy>();
+                }
             }
         }
 

@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b53b31e8b9b337f4aa7d6f65470644db, type: 3}
+  m_Name: Shotgun
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Weapons.GunStatsAsset
+  stats:
+    displayName: Shotgun
+    archetype: 2
+    fireMode: 0
+    roundsPerMinute: 70
+    damage: 9
+    pellets: 8
+    magazineSize: 6
+    reserveAmmo: 24
+    reloadSeconds: 2.6
+    range: 40
+    baseSpreadDegrees: 2.5
+    bloomPerShotDegrees: 1
+    maxBloomDegrees: 6
+    bloomRecoveryDegreesPerSecond: 8
+    sprayResetSeconds: 0.4
+    pelletSpreadDegrees: 3

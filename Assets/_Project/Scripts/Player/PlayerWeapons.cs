@@ -1,3 +1,8 @@
+using System.Collections.Generic;
+using System.Linq;
+using AnimeFpsGame.Combat;
+using AnimeFpsGame.Effects;
+using AnimeFpsGame.Weapons;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -5,8 +10,8 @@ using UnityEngine.InputSystem;
 namespace AnimeFpsGame.Player
 {
     /// <summary>
-    /// Main weapon + pistol. The active slot is a NetworkVariable so every client shows the same gun.
-    /// Firing is deliberately not implemented: it logs "shoot" locally and on the server.
+    /// Owns one persistent gun instance per serialized slot, routes owner input to the active gun,
+    /// drives the first-person viewmodel feel, and reports shots locally and to the server.
     /// </summary>
     public class PlayerWeapons : NetworkBehaviour
     {
@@ -21,24 +26,55 @@ namespace AnimeFpsGame.Player
         [SerializeField] Transform visualsRoot;
         [SerializeField] Animator animator;
         [SerializeField] Camera viewCamera;
+        [SerializeField] Health health;
+        [SerializeField] ShotEffects effects;
 
         readonly NetworkVariable<byte> activeSlot = new(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        IGun[] guns;
+        IGun boundGun;
+        PlayerLook playerLook;
         InputAction attackAction;
+        InputAction reloadAction;
         InputAction nextAction;
         InputAction previousAction;
         GameObject currentViewmodel;
+        Vector3 viewmodelBasePosition;
+        Vector3 viewmodelBaseEuler;
+        float viewmodelKickBack;
+        float viewmodelKickUp;
         float lastScrollTime;
+        float[] serverNextShotTime;
+        float serverNextAnyShotTime;
 
         public Camera ViewCamera => viewCamera;
+        public Health Health => health;
         public int CurrentSlot => activeSlot.Value;
+        public int SlotCount => slots?.Length ?? 0;
         public GameObject CurrentViewmodel => currentViewmodel;
+        public bool IsDead => health != null && health.IsDead;
+
+        public IGun ActiveGun =>
+            guns != null && CurrentSlot >= 0 && CurrentSlot < guns.Length ? guns[CurrentSlot] : null;
+
+        void Awake()
+        {
+            playerLook = GetComponent<PlayerLook>();
+            BuildGuns();
+        }
 
         public override void OnNetworkSpawn()
         {
             activeSlot.OnValueChanged += OnSlotChanged;
+
+            if (health != null)
+            {
+                health.DeathStateChanged += OnDeathStateChanged;
+            }
+
             ApplySlot(activeSlot.Value);
+            ApplyDeathVisuals(IsDead);
             Debug.Log($"[Player] spawned client={OwnerClientId} owner={IsOwner} slot={activeSlot.Value} pos={transform.position}");
 
             if (!IsOwner)
@@ -50,14 +86,24 @@ namespace AnimeFpsGame.Player
             if (input != null && input.actions != null)
             {
                 attackAction = input.actions["Attack"];
+                reloadAction = input.actions["Reload"];
                 nextAction = input.actions["Next"];
                 previousAction = input.actions["Previous"];
             }
+
+            BindActiveGun();
         }
 
         public override void OnNetworkDespawn()
         {
             activeSlot.OnValueChanged -= OnSlotChanged;
+
+            if (health != null)
+            {
+                health.DeathStateChanged -= OnDeathStateChanged;
+            }
+
+            UnbindGun();
         }
 
         void Update()
@@ -67,6 +113,100 @@ namespace AnimeFpsGame.Player
                 return;
             }
 
+            TickGuns();
+            HandleSlotInput();
+
+            if (health != null && health.IsDead)
+            {
+                UpdateViewmodelFeel();
+                return;
+            }
+
+            var gun = ActiveGun;
+            if (gun == null)
+            {
+                return;
+            }
+
+            if (reloadAction != null && reloadAction.WasPressedThisFrame())
+            {
+                gun.TryStartReload();
+            }
+
+            if (attackAction != null)
+            {
+                var pressed = attackAction.WasPressedThisFrame();
+                var held = attackAction.IsPressed();
+                if (pressed || held)
+                {
+                    TryFireActive(gun, pressed, held);
+                }
+            }
+
+            UpdateViewmodelFeel();
+        }
+
+        public void SetSlot(byte slot)
+        {
+            if (!IsOwner || slots == null || slots.Length == 0)
+            {
+                return;
+            }
+
+            activeSlot.Value = (byte)(slot % slots.Length);
+        }
+
+        public void ResetAmmo()
+        {
+            if (guns == null)
+            {
+                return;
+            }
+
+            foreach (var gun in guns)
+            {
+                gun?.ResetAmmo();
+            }
+        }
+
+        void BuildGuns()
+        {
+            if (slots == null)
+            {
+                guns = System.Array.Empty<IGun>();
+                return;
+            }
+
+            guns = new IGun[slots.Length];
+            serverNextShotTime = new float[slots.Length];
+            for (var i = 0; i < slots.Length; i++)
+            {
+                var stats = slots[i] != null && slots[i].stats != null ? slots[i].stats.stats : null;
+                if (stats == null)
+                {
+                    Debug.LogError($"[PlayerWeapons] Slot {i} has no GunStatsAsset; run Anime FPS > Run All.");
+                    continue;
+                }
+
+                guns[i] = GunFactory.Create(stats);
+            }
+        }
+
+        void TickGuns()
+        {
+            if (guns == null)
+            {
+                return;
+            }
+
+            foreach (var gun in guns)
+            {
+                gun?.Tick(Time.deltaTime);
+            }
+        }
+
+        void HandleSlotInput()
+        {
             if (nextAction != null && nextAction.WasPressedThisFrame())
             {
                 SetSlot((byte)((activeSlot.Value + 1) % slots.Length));
@@ -84,26 +224,274 @@ namespace AnimeFpsGame.Player
                 lastScrollTime = Time.unscaledTime;
                 SetSlot((byte)((activeSlot.Value + (scroll > 0f ? 1 : slots.Length - 1)) % slots.Length));
             }
-
-            if (attackAction != null && attackAction.WasPressedThisFrame())
-            {
-                Debug.Log("shoot");
-                ShootServerRpc();
-            }
         }
 
-        public void SetSlot(byte slot)
+        void TryFireActive(IGun gun, bool pressed, bool held)
         {
-            if (!IsOwner || slots == null || slots.Length == 0)
+            if (health != null && health.IsDead)
             {
                 return;
             }
 
-            activeSlot.Value = (byte)(slot % slots.Length);
+            var cameraTransform = viewCamera != null ? viewCamera.transform : transform;
+            if (!gun.TryFire(cameraTransform.position, cameraTransform.forward, Time.time,
+                    pressed, held, out var shot))
+            {
+                return;
+            }
+
+            shot.Slot = activeSlot.Value;
+
+            var hits = new RaycastHit[shot.Directions.Length];
+            for (var i = 0; i < shot.Directions.Length; i++)
+            {
+                TryRaycast(shot.Origin, shot.Directions[i], shot.Range, transform, out hits[i]);
+            }
+
+            if (effects != null)
+            {
+                effects.PlayLocal(shot.Origin, shot.Directions, hits);
+            }
+
+            if (IsSpawned)
+            {
+                FireServerRpc(shot.Slot, shot.Origin, shot.Directions);
+            }
+
+            viewmodelKickBack += 0.02f;
+            viewmodelKickUp += UnityEngine.Random.Range(1.5f, 2.5f);
+        }
+
+        /// <summary>Nearest non-shooter hit for one ray; shared by local feedback and server validation.</summary>
+        public static bool TryRaycast(Vector3 origin, Vector3 direction, float range, Transform shooter,
+            out RaycastHit hit)
+        {
+            hit = default;
+            var hits = Physics.RaycastAll(origin, direction, range, ~0, QueryTriggerInteraction.Ignore);
+            var bestDistance = float.MaxValue;
+            var found = false;
+
+            foreach (var candidate in hits)
+            {
+                if (shooter != null && candidate.collider.transform.IsChildOf(shooter))
+                {
+                    continue;
+                }
+
+                if (candidate.distance < bestDistance)
+                {
+                    bestDistance = candidate.distance;
+                    hit = candidate;
+                    found = true;
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// The server re-raycasts what the client reported. It never trusts client damage: pellets,
+        /// range, origin, aim cone and cadence are all checked here before any health changes.
+        /// </summary>
+        [ServerRpc]
+        void FireServerRpc(byte slot, Vector3 origin, Vector3[] directions, ServerRpcParams rpcParams = default)
+        {
+            if (health != null && health.IsDead)
+            {
+                return;
+            }
+
+            if (directions == null || directions.Length == 0)
+            {
+                return;
+            }
+
+            if (guns == null || slot >= guns.Length || guns[slot] == null)
+            {
+                return;
+            }
+
+            if (serverNextShotTime == null || slot >= serverNextShotTime.Length)
+            {
+                return;
+            }
+
+            var stats = guns[slot].Stats;
+            if (directions.Length > Mathf.Max(1, stats.pellets))
+            {
+                return;
+            }
+
+            if (Vector3.Distance(origin, transform.position) > 3f)
+            {
+                return;
+            }
+
+            var now = Time.time;
+            // One global floor stops a client from alternating slots to beat the per-slot cadence.
+            if (now < serverNextAnyShotTime)
+            {
+                return;
+            }
+
+            if (now < serverNextShotTime[slot])
+            {
+                return;
+            }
+
+            var flatForward = transform.forward;
+            flatForward.y = 0f;
+            if (flatForward.sqrMagnitude < 0.0001f)
+            {
+                flatForward = Vector3.forward;
+            }
+
+            flatForward.Normalize();
+
+            var validated = new List<Vector3>(directions.Length);
+            foreach (var raw in directions)
+            {
+                if (raw.sqrMagnitude < 0.0001f)
+                {
+                    return;
+                }
+
+                var direction = raw.normalized;
+                var flat = direction;
+                flat.y = 0f;
+                if (flat.sqrMagnitude < 0.0001f || Vector3.Angle(flatForward, flat) > 60f)
+                {
+                    return;
+                }
+
+                validated.Add(direction);
+            }
+
+            // A small tolerance keeps client/server frame jitter from rejecting legitimate shots.
+            serverNextShotTime[slot] = now + 60f / Mathf.Max(1f, stats.roundsPerMinute) * 0.8f;
+            // 20 shots/s ceiling: above the fastest configured gun (SMG, 15/s), so it only
+            // catches clients alternating slots to exceed any single gun's cadence.
+            serverNextAnyShotTime = now + 0.05f;
+
+            var points = new List<Vector3>(validated.Count);
+            var normals = new List<Vector3>(validated.Count);
+
+            foreach (var direction in validated)
+            {
+                if (!TryRaycast(origin, direction, stats.range, transform, out var hit))
+                {
+                    points.Add(origin + direction * stats.range);
+                    normals.Add(-direction);
+                    continue;
+                }
+
+                points.Add(hit.point);
+                normals.Add(hit.normal);
+
+                var damageable = hit.collider.GetComponentInParent<IDamageable>();
+                damageable?.ApplyDamage(stats.damage, hit.point, hit.normal, OwnerClientId);
+            }
+
+            var targets = NetworkManager.Singleton.ConnectedClientsIds
+                .Where(id => id != OwnerClientId)
+                .ToArray();
+            var targetsParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams { TargetClientIds = targets }
+            };
+
+            FireEffectClientRpc(slot, origin, validated.ToArray(), points.ToArray(), normals.ToArray(),
+                targetsParams);
+        }
+
+        [ClientRpc]
+        void FireEffectClientRpc(byte slot, Vector3 origin, Vector3[] directions, Vector3[] points,
+            Vector3[] normals, ClientRpcParams rpcParams = default)
+        {
+            if (effects != null)
+            {
+                effects.PlayRemote(origin, directions, points);
+            }
+        }
+
+        void OnDeathStateChanged(bool dead)
+        {
+            ApplyDeathVisuals(dead);
+        }
+
+        void ApplyDeathVisuals(bool dead)
+        {
+            if (dead)
+            {
+                if (guns != null)
+                {
+                    foreach (var gun in guns)
+                    {
+                        gun?.CancelReload();
+                    }
+                }
+
+                if (currentViewmodel != null)
+                {
+                    currentViewmodel.SetActive(false);
+                }
+
+                // Remote corpses disappear; the owner only loses the viewmodel and the HUD.
+                if (visualsRoot != null && !IsOwner)
+                {
+                    visualsRoot.gameObject.SetActive(false);
+                }
+
+                return;
+            }
+
+            if (visualsRoot != null)
+            {
+                visualsRoot.gameObject.SetActive(true);
+            }
+
+            if (slots != null && slots.Length > 0)
+            {
+                ApplyVisibleWeaponMeshes(slots[Mathf.Clamp(CurrentSlot, 0, slots.Length - 1)]);
+            }
+
+            if (IsOwner && currentViewmodel != null)
+            {
+                currentViewmodel.SetActive(true);
+            }
+        }
+
+        void UpdateViewmodelFeel()
+        {
+            viewmodelKickBack = Mathf.Lerp(viewmodelKickBack, 0f, 12f * Time.deltaTime);
+            viewmodelKickUp = Mathf.Lerp(viewmodelKickUp, 0f, 12f * Time.deltaTime);
+
+            if (currentViewmodel == null)
+            {
+                return;
+            }
+
+            var gun = ActiveGun;
+            var reload01 = gun != null && gun.IsReloading
+                ? Mathf.Sin(gun.ReloadProgress01 * Mathf.PI)
+                : 0f;
+
+            currentViewmodel.transform.localPosition = viewmodelBasePosition + new Vector3(
+                0f,
+                -0.06f * reload01,
+                -viewmodelKickBack - 0.03f * reload01);
+
+            currentViewmodel.transform.localRotation = Quaternion.Euler(
+                viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01, 0f, 0f));
         }
 
         void OnSlotChanged(byte previous, byte current)
         {
+            if (guns != null && previous < guns.Length)
+            {
+                guns[previous]?.CancelReload();
+            }
+
             ApplySlot(current);
         }
 
@@ -124,16 +512,20 @@ namespace AnimeFpsGame.Player
             if (IsOwner && viewmodelAnchor != null && definition.viewmodelPrefab != null)
             {
                 currentViewmodel = Instantiate(definition.viewmodelPrefab, viewmodelAnchor);
-                currentViewmodel.transform.localPosition = definition.viewmodelLocalPosition;
-                currentViewmodel.transform.localRotation = Quaternion.Euler(definition.viewmodelLocalEuler);
+                viewmodelBasePosition = definition.viewmodelLocalPosition;
+                viewmodelBaseEuler = definition.viewmodelLocalEuler;
+                currentViewmodel.transform.localPosition = viewmodelBasePosition;
+                currentViewmodel.transform.localRotation = Quaternion.Euler(viewmodelBaseEuler);
                 currentViewmodel.transform.localScale = Vector3.one * definition.viewmodelScale;
+                // Switching slots while dead must not bring the gun back on screen.
+                currentViewmodel.SetActive(!IsDead);
             }
 
             if (animator != null && !string.IsNullOrEmpty(definition.animatorInt))
             {
                 foreach (var other in slots)
                 {
-                    if (!string.IsNullOrEmpty(other.animatorInt))
+                    if (other != null && !string.IsNullOrEmpty(other.animatorInt))
                     {
                         animator.SetInteger(other.animatorInt, 0);
                     }
@@ -143,6 +535,11 @@ namespace AnimeFpsGame.Player
             }
 
             ApplyVisibleWeaponMeshes(definition);
+
+            if (IsOwner)
+            {
+                BindActiveGun();
+            }
         }
 
         /// <summary>Own body is hidden from the owner's camera; other clients see the soldier and one gun.</summary>
@@ -172,10 +569,37 @@ namespace AnimeFpsGame.Player
             }
         }
 
-        [ServerRpc]
-        void ShootServerRpc()
+        void BindActiveGun()
         {
-            Debug.Log($"shoot from client {OwnerClientId}");
+            var gun = ActiveGun;
+            if (boundGun == gun)
+            {
+                return;
+            }
+
+            UnbindGun();
+            boundGun = gun;
+            if (boundGun != null)
+            {
+                boundGun.RecoilKicked += OnRecoilKicked;
+            }
+        }
+
+        void UnbindGun()
+        {
+            if (boundGun != null)
+            {
+                boundGun.RecoilKicked -= OnRecoilKicked;
+                boundGun = null;
+            }
+        }
+
+        void OnRecoilKicked(Vector2 degrees)
+        {
+            if (IsOwner && playerLook != null)
+            {
+                playerLook.AddRecoil(degrees);
+            }
         }
     }
 }
