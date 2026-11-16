@@ -1,4 +1,5 @@
 using AnimeFpsGame.Combat;
+using AnimeFpsGame.Effects;
 using AnimeFpsGame.Weapons;
 using Unity.Netcode;
 using UnityEngine;
@@ -24,6 +25,7 @@ namespace AnimeFpsGame.Player
         [SerializeField] Animator animator;
         [SerializeField] Camera viewCamera;
         [SerializeField] Health health;
+        [SerializeField] ShotEffects effects;
 
         readonly NetworkVariable<byte> activeSlot = new(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -216,9 +218,15 @@ namespace AnimeFpsGame.Player
 
             shot.Slot = activeSlot.Value;
 
+            var hits = new RaycastHit[shot.Directions.Length];
             for (var i = 0; i < shot.Directions.Length; i++)
             {
-                TryRaycast(shot.Origin, shot.Directions[i], shot.Range, transform, out _);
+                TryRaycast(shot.Origin, shot.Directions[i], shot.Range, transform, out hits[i]);
+            }
+
+            if (effects != null)
+            {
+                effects.PlayLocal(shot.Origin, shot.Directions, hits);
             }
 
             viewmodelKickBack += 0.02f;

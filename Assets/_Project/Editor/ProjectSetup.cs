@@ -336,11 +336,14 @@ namespace AnimeFpsGame.EditorTools
 
             var weapons = root.AddComponent<AnimeFpsGame.Player.PlayerWeapons>();
             var health = root.AddComponent<Health>();
+            var effects = root.AddComponent<AnimeFpsGame.Effects.ShotEffects>();
+            root.AddComponent<AnimeFpsGame.UI.WeaponHud>();
             SetReference(weapons, "viewmodelAnchor", viewmodelAnchor.transform);
             SetReference(weapons, "visualsRoot", visuals.transform);
             SetReference(weapons, "animator", animator);
             SetReference(weapons, "viewCamera", cameraComponent);
             SetReference(weapons, "health", health);
+            SetReference(weapons, "effects", effects);
 
             var weaponsSerialized = new SerializedObject(weapons);
             var slots = weaponsSerialized.FindProperty("slots");

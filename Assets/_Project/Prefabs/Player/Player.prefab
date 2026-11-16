@@ -111,6 +111,8 @@ GameObject:
   - component: {fileID: 916678180725440337}
   - component: {fileID: 1441142932560822101}
   - component: {fileID: 1248408266948130146}
+  - component: {fileID: 4340576479629155583}
+  - component: {fileID: 8069260270364874723}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -172,7 +174,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 636472671
+  GlobalObjectIdHash: 2396071181
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -407,6 +409,7 @@ MonoBehaviour:
   animator: {fileID: 1852970460045972972}
   viewCamera: {fileID: 5291340539011714514}
   health: {fileID: 1248408266948130146}
+  effects: {fileID: 4340576479629155583}
 --- !u!114 &1248408266948130146
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -422,6 +425,33 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   maxHealth: 100
   ignoreOwnerDamage: 1
+--- !u!114 &4340576479629155583
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6632739516172423482}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aabc2f9d18be9c94caad89aa57839c28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Effects.ShotEffects
+  tracerColor: {r: 1, g: 0.82, b: 0.4, a: 0.9}
+  impactColor: {r: 1, g: 0.9, b: 0.65, a: 0.85}
+  tracerMissDistance: 60
+--- !u!114 &8069260270364874723
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6632739516172423482}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 96f81e080a7f09648badcb1fd2e77687, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.UI.WeaponHud
 --- !u!1 &6639496885551333599
 GameObject:
   m_ObjectHideFlags: 0
