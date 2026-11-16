@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Unity.Netcode;
@@ -19,6 +20,7 @@ namespace AnimeFpsGame.EditorTools
         public const string ProjectRoot = "Assets/_Project";
         public const string ScenesDir = ProjectRoot + "/Scenes";
         public const string MainScenePath = ScenesDir + "/Main.unity";
+        public const string MainMenuScenePath = ScenesDir + "/MainMenu.unity";
         public const string SampleScenePath = ScenesDir + "/SampleScene.unity";
         public const string PlayerPrefabPath = ProjectRoot + "/Prefabs/Player/Player.prefab";
         public const string ViewsDir = ProjectRoot + "/Prefabs/Weapons";
@@ -42,6 +44,7 @@ namespace AnimeFpsGame.EditorTools
             SetupScene();
             BuildPlayerPrefab();
             SetupNetworkManager();
+            SetupMainMenu();
             Debug.Log("[ProjectSetup] RunAll complete");
         }
 
@@ -97,6 +100,51 @@ namespace AnimeFpsGame.EditorTools
 
             AssetDatabase.SaveAssets();
             Debug.Log("[ProjectSetup] Scene ready: " + MainScenePath);
+        }
+
+        [MenuItem("Anime FPS/0. Setup Main Menu")]
+        public static void SetupMainMenu()
+        {
+            var hasMenu = AssetDatabase.LoadAssetAtPath<SceneAsset>(MainMenuScenePath) != null;
+            var scene = hasMenu
+                ? EditorSceneManager.OpenScene(MainMenuScenePath, OpenSceneMode.Single)
+                : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            if (Object.FindFirstObjectByType<Camera>() == null)
+            {
+                var cameraObject = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
+                cameraObject.tag = "MainCamera";
+                var camera = cameraObject.GetComponent<Camera>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = new Color(0.03f, 0.03f, 0.04f, 1f);
+            }
+
+            var menuObject = GameObject.Find("Main Menu");
+            if (menuObject == null)
+            {
+                menuObject = new GameObject("Main Menu");
+            }
+
+            if (menuObject.GetComponent<AnimeFpsGame.Menu.MainMenuController>() == null)
+            {
+                menuObject.AddComponent<AnimeFpsGame.Menu.MainMenuController>();
+            }
+
+            EditorSceneManager.SaveScene(scene, MainMenuScenePath);
+
+            var buildScenes = new List<EditorBuildSettingsScene>
+            {
+                new(MainMenuScenePath, true),
+                new(MainScenePath, true),
+            };
+            buildScenes.AddRange(EditorBuildSettings.scenes.Where(entry =>
+                entry.path != MainMenuScenePath &&
+                entry.path != MainScenePath &&
+                AssetDatabase.LoadAssetAtPath<SceneAsset>(entry.path) != null));
+            EditorBuildSettings.scenes = buildScenes.ToArray();
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("[ProjectSetup] Main menu ready: " + MainMenuScenePath);
         }
 
         [MenuItem("Anime FPS/2. Setup NetworkManager")]

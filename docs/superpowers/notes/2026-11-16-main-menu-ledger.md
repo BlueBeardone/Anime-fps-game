@@ -14,4 +14,8 @@ Task 1: complete — MainMenuController + 3 PlayMode tests (`MenuBuildsTheFiveEx
 `SettingsClickKeepsTheCurrentScene`, `MenuReusesAnExistingEventSystem`). Command:
 `Unity -runTests -testPlatform PlayMode -testFilter AnimeFpsGame.Tests.MainMenuTests` → Passed 3/3, exit 0.
 
+Task 2: complete — `ProjectSetup.SetupMainMenu()`, generated `MainMenu.unity`, build order
+`MainMenu` (0) / `Main` (1). Same test command after generation → Passed 5/5, exit 0.
+
+
 

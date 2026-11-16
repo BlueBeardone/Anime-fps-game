@@ -77,5 +77,23 @@ namespace AnimeFpsGame.Tests
             Assert.AreEqual(1, Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None).Length);
             Object.Destroy(existing);
         }
+
+        [Test]
+        public void MainMenuIsFirstInBuildSettings()
+        {
+            StringAssert.EndsWith("MainMenu.unity", SceneUtility.GetScenePathByBuildIndex(0));
+            StringAssert.EndsWith("Main.unity", SceneUtility.GetScenePathByBuildIndex(1));
+        }
+
+        [UnityTest]
+        public IEnumerator MainMenuSceneLoadsItsController()
+        {
+            SceneManager.LoadScene("MainMenu");
+            yield return null;
+            yield return null;
+
+            Assert.IsNotNull(Object.FindAnyObjectByType<MainMenuController>());
+            Assert.IsNotNull(Object.FindAnyObjectByType<EventSystem>());
+        }
     }
 }
