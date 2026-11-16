@@ -108,8 +108,9 @@ namespace AnimeFpsGame.Effects
                 var line = tracers[i];
                 line.startWidth = 0.012f * t + 0.001f;
                 line.endWidth = 0.004f * t;
-                colorBlock.SetColor("_BaseColor", new Color(
-                    tracerColor.r, tracerColor.g, tracerColor.b, tracerColor.a * t));
+                var faded = new Color(tracerColor.r, tracerColor.g, tracerColor.b, tracerColor.a * t);
+                colorBlock.SetColor("_BaseColor", faded);
+                colorBlock.SetColor("_Color", faded);
                 line.SetPropertyBlock(colorBlock);
             }
 
@@ -131,8 +132,10 @@ namespace AnimeFpsGame.Effects
                 var puffRenderer = puff.GetComponent<MeshRenderer>();
                 if (puffRenderer != null)
                 {
-                    colorBlock.SetColor("_BaseColor", new Color(
-                        impactColor.r, impactColor.g, impactColor.b, impactColor.a * t));
+                    var faded = new Color(
+                        impactColor.r, impactColor.g, impactColor.b, impactColor.a * t);
+                    colorBlock.SetColor("_BaseColor", faded);
+                    colorBlock.SetColor("_Color", faded);
                     puffRenderer.SetPropertyBlock(colorBlock);
                 }
             }

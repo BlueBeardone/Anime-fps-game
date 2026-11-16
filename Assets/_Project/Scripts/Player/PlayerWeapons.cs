@@ -369,7 +369,9 @@ namespace AnimeFpsGame.Player
 
             // A small tolerance keeps client/server frame jitter from rejecting legitimate shots.
             serverNextShotTime[slot] = now + 60f / Mathf.Max(1f, stats.roundsPerMinute) * 0.8f;
-            serverNextAnyShotTime = now + 0.06f;
+            // 20 shots/s ceiling: above the fastest configured gun (SMG, 15/s), so it only
+            // catches clients alternating slots to exceed any single gun's cadence.
+            serverNextAnyShotTime = now + 0.05f;
 
             var points = new List<Vector3>(validated.Count);
             var normals = new List<Vector3>(validated.Count);
