@@ -88,15 +88,7 @@ namespace AnimeFpsGame.EditorTools
                 AssetDatabase.DeleteAsset(SampleScenePath);
             }
 
-            var buildScenes = EditorBuildSettings.scenes
-                .Where(entry => AssetDatabase.LoadAssetAtPath<SceneAsset>(entry.path) != null)
-                .ToList();
-            if (buildScenes.All(entry => entry.path != MainScenePath))
-            {
-                buildScenes.Insert(0, new EditorBuildSettingsScene(MainScenePath, true));
-            }
-
-            EditorBuildSettings.scenes = buildScenes.ToArray();
+            ApplyBuildOrder();
 
             AssetDatabase.SaveAssets();
             Debug.Log("[ProjectSetup] Scene ready: " + MainScenePath);
@@ -132,19 +124,37 @@ namespace AnimeFpsGame.EditorTools
 
             EditorSceneManager.SaveScene(scene, MainMenuScenePath);
 
-            var buildScenes = new List<EditorBuildSettingsScene>
-            {
-                new(MainMenuScenePath, true),
-                new(MainScenePath, true),
-            };
-            buildScenes.AddRange(EditorBuildSettings.scenes.Where(entry =>
-                entry.path != MainMenuScenePath &&
-                entry.path != MainScenePath &&
-                AssetDatabase.LoadAssetAtPath<SceneAsset>(entry.path) != null));
-            EditorBuildSettings.scenes = buildScenes.ToArray();
+            ApplyBuildOrder();
 
             AssetDatabase.SaveAssets();
             Debug.Log("[ProjectSetup] Main menu ready: " + MainMenuScenePath);
+        }
+
+        /// <summary>
+        /// Build index 0 must be the menu so a build boots into it. Both setup steps call this;
+        /// otherwise running "Setup Scene" after resetting Build Settings could put Main first.
+        /// Only existing scene assets are registered.
+        /// </summary>
+        static void ApplyBuildOrder()
+        {
+            var ordered = new List<EditorBuildSettingsScene>();
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(MainMenuScenePath) != null)
+            {
+                ordered.Add(new EditorBuildSettingsScene(MainMenuScenePath, true));
+            }
+
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(MainScenePath) != null)
+            {
+                ordered.Add(new EditorBuildSettingsScene(MainScenePath, true));
+            }
+
+            ordered.AddRange(EditorBuildSettings.scenes.Where(entry =>
+                entry.path != MainMenuScenePath &&
+                entry.path != MainScenePath &&
+                AssetDatabase.LoadAssetAtPath<SceneAsset>(entry.path) != null));
+
+            EditorBuildSettings.scenes = ordered.ToArray();
         }
 
         [MenuItem("Anime FPS/2. Setup NetworkManager")]

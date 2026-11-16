@@ -26,6 +26,9 @@ namespace AnimeFpsGame.Menu
 
         public Button[] Buttons { get; private set; }
 
+        /// <summary>Test seam: when set, EXIT calls this instead of closing the application.</summary>
+        public System.Action QuitHandler { get; set; }
+
         bool built;
 
         void Awake()
@@ -102,6 +105,12 @@ namespace AnimeFpsGame.Menu
 
         public void QuitGame()
         {
+            if (QuitHandler != null)
+            {
+                QuitHandler();
+                return;
+            }
+
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

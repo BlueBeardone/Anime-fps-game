@@ -32,6 +32,19 @@ Cost if wrong: a dev passing the flag skips the menu, which is the intended dev 
 Task 4: complete — notes updated; full PlayMode suite: `Unity -runTests -testPlatform PlayMode` →
 Passed 8/8 (6 menu + 2 range), exit 0; no compiler errors or unhandled log messages.
 
+Review fix pass (after the fresh-context reviewer found 4 Important, 0 Critical):
+- Click paths: tests now invoke RANGE (loads `Main`), SETTINGS (asserts the placeholder log via
+  `LogAssert.Expect`), and EXIT (through a `QuitHandler` test seam). Deleting an `AddListener` now fails.
+- Dimming: `UnavailableButtonsAreVisiblyDimmed` asserts Campaign/Multiplayer labels are darker than RANGE.
+- Build order: `ProjectSetup.ApplyBuildOrder()` is shared by `SetupScene` and `SetupMainMenu`; verified by
+  removing the MainMenu entry, running `SetupScene`, and confirming MainMenu returned at index 0.
+- Host failure: new `RangeNotice` uGUI banner is shown from `NetworkBootstrap.Host()` when `StartHost()`
+  fails, naming the port. `HostFailureShowsAVisibleNotice` blocks UDP 7777 with `UdpClient` and expects the
+  three Unity Transport bind-failure error logs explicitly.
+- Menu test teardown now also shuts down and destroys the DDOL `NetworkManager` (Range click test).
+Full suite: `Unity -runTests -testPlatform PlayMode` → Passed 12/12, exit 0.
+
+
 
 
 

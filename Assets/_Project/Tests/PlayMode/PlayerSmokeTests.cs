@@ -1,4 +1,7 @@
 using System.Collections;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
+using AnimeFpsGame.Networking;
 using NUnit.Framework;
 using Unity.Netcode;
 using UnityEngine;
@@ -103,6 +106,36 @@ namespace AnimeFpsGame.Tests
 
             Assert.IsNotNull(Object.FindAnyObjectByType<AnimeFpsGame.Player.PlayerWeapons>(),
                 "Solo host must spawn the player");
+        }
+
+        [UnityTest]
+        public IEnumerator HostFailureShowsAVisibleNotice()
+        {
+            var blocker = new UdpClient(7777);
+            try
+            {
+                // Unity Transport reports the bind failure as an error; that is the condition under test.
+                LogAssert.Expect(LogType.Error, new Regex("Failed to bind UDP socket.*port 7777"));
+                LogAssert.Expect(LogType.Error, new Regex("Server failed to bind.*"));
+                LogAssert.Expect(LogType.Error, new Regex(".*network transport start failure.*"));
+
+                SceneManager.LoadScene("Main");
+
+                var notice = default(RangeNotice);
+                var deadline = Time.realtimeSinceStartup + 8f;
+                while (notice == null && Time.realtimeSinceStartup < deadline)
+                {
+                    notice = Object.FindAnyObjectByType<RangeNotice>();
+                    yield return null;
+                }
+
+                Assert.IsNotNull(notice, "A failed solo host must show a visible notice");
+                StringAssert.Contains("7777", notice.Message, "The notice must name the blocked port");
+            }
+            finally
+            {
+                blocker.Dispose();
+            }
         }
     }
 }

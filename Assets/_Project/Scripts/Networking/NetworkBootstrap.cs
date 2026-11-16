@@ -129,6 +129,7 @@ namespace AnimeFpsGame.Networking
             {
                 Status = "Host failed";
                 Debug.LogWarning("[Net] " + Status);
+                RangeNotice.Show($"Could not start the Range. Port {port} may already be in use.");
             }
         }
 

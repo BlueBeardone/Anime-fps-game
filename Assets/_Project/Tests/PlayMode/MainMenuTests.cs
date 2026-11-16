@@ -2,6 +2,7 @@ using System.Collections;
 using System.Linq;
 using AnimeFpsGame.Menu;
 using NUnit.Framework;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -14,8 +15,8 @@ namespace AnimeFpsGame.Tests
     {
         GameObject menuObject;
 
-        [TearDown]
-        public void TearDown()
+        [UnityTearDown]
+        public IEnumerator UnityTearDown()
         {
             if (menuObject != null)
             {
@@ -31,6 +32,22 @@ namespace AnimeFpsGame.Tests
             {
                 Object.Destroy(eventSystem.gameObject);
             }
+
+            // Range's auto-host creates a DDOL NetworkManager that would survive into the next test.
+            var manager = NetworkManager.Singleton;
+            if (manager != null)
+            {
+                manager.Shutdown();
+            }
+
+            yield return null;
+
+            if (manager != null)
+            {
+                Object.Destroy(manager.gameObject);
+            }
+
+            yield return null;
         }
 
         [UnityTest]
@@ -53,6 +70,26 @@ namespace AnimeFpsGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator UnavailableButtonsAreVisiblyDimmed()
+        {
+            menuObject = new GameObject("Menu", typeof(MainMenuController));
+            yield return null;
+
+            var menu = menuObject.GetComponent<MainMenuController>();
+            var campaign = menu.GetButton("CAMPAIGN").GetComponentInChildren<Text>();
+            var multiplayer = menu.GetButton("MULTIPLAYER").GetComponentInChildren<Text>();
+            var range = menu.GetButton("RANGE").GetComponentInChildren<Text>();
+
+            Assert.IsNotNull(campaign);
+            Assert.IsNotNull(multiplayer);
+            Assert.IsNotNull(range);
+            Assert.Less(campaign.color.maxColorComponent, range.color.maxColorComponent,
+                "CAMPAIGN's label must be dimmer than an enabled label");
+            Assert.Less(multiplayer.color.maxColorComponent, range.color.maxColorComponent,
+                "MULTIPLAYER's label must be dimmer than an enabled label");
+        }
+
+        [UnityTest]
         public IEnumerator SettingsClickKeepsTheCurrentScene()
         {
             menuObject = new GameObject("Menu", typeof(MainMenuController));
@@ -60,10 +97,45 @@ namespace AnimeFpsGame.Tests
 
             var menu = menuObject.GetComponent<MainMenuController>();
             var sceneBefore = SceneManager.GetActiveScene().name;
-            menu.GetButton("SETTINGS").onClick.Invoke();
+            LogAssert.Expect(LogType.Log, "[Menu] Settings is not implemented yet.");
+            menu.GetButton(MainMenuController.SettingsLabel).onClick.Invoke();
             yield return null;
 
             Assert.AreEqual(sceneBefore, SceneManager.GetActiveScene().name);
+        }
+
+        [UnityTest]
+        public IEnumerator ExitClickRequestsAQuit()
+        {
+            menuObject = new GameObject("Menu", typeof(MainMenuController));
+            yield return null;
+
+            var menu = menuObject.GetComponent<MainMenuController>();
+            var quitRequested = false;
+            menu.QuitHandler = () => quitRequested = true;
+            menu.GetButton(MainMenuController.ExitLabel).onClick.Invoke();
+            yield return null;
+
+            Assert.IsTrue(quitRequested, "EXIT must be wired to the quit path");
+        }
+
+        [UnityTest]
+        public IEnumerator RangeClickLoadsTheMainScene()
+        {
+            menuObject = new GameObject("Menu", typeof(MainMenuController));
+            yield return null;
+
+            var menu = menuObject.GetComponent<MainMenuController>();
+            menu.GetButton(MainMenuController.RangeLabel).onClick.Invoke();
+
+            var deadline = Time.realtimeSinceStartup + 10f;
+            while (SceneManager.GetActiveScene().name != MainMenuController.RangeSceneName &&
+                   Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(MainMenuController.RangeSceneName, SceneManager.GetActiveScene().name);
         }
 
         [UnityTest]
