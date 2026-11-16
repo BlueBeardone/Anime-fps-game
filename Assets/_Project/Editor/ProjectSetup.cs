@@ -85,6 +85,8 @@ namespace AnimeFpsGame.EditorTools
                 }
             }
 
+            EnsureTargetDummies();
+
             EditorSceneManager.SaveScene(scene, MainScenePath);
             if (hasSample)
             {
@@ -345,6 +347,11 @@ namespace AnimeFpsGame.EditorTools
             SetReference(weapons, "health", health);
             SetReference(weapons, "effects", effects);
 
+            var respawn = root.AddComponent<PlayerRespawn>();
+            SetReference(respawn, "health", health);
+            SetReference(respawn, "weapons", weapons);
+            SetReference(respawn, "controller", controller);
+
             var weaponsSerialized = new SerializedObject(weapons);
             var slots = weaponsSerialized.FindProperty("slots");
             slots.arraySize = 4;
@@ -448,6 +455,62 @@ namespace AnimeFpsGame.EditorTools
             {
                 property.objectReferenceValue = value;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>
+        /// Three networked practice targets. Scene NetworkObjects, so the server spawns them when
+        /// the host starts; ignoreOwnerDamage is off because the server owns the dummy itself.
+        /// </summary>
+        static void EnsureTargetDummies()
+        {
+            var material = EnsureMaterial(ProjectRoot + "/Art/Materials/TargetDummy.mat",
+                new Color(0.72f, 0.18f, 0.15f));
+
+            var positions = new[]
+            {
+                new Vector3(0f, 1f, 8f),
+                new Vector3(-3f, 1f, 10f),
+                new Vector3(3f, 1f, 10f)
+            };
+
+            for (var i = 0; i < positions.Length; i++)
+            {
+                var name = "TargetDummy " + (i + 1);
+                var existing = GameObject.Find(name);
+                var dummy = existing != null
+                    ? existing
+                    : GameObject.CreatePrimitive(PrimitiveType.Capsule);
+
+                dummy.name = name;
+                dummy.transform.position = positions[i];
+
+                var renderer = dummy.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                {
+                    renderer.sharedMaterial = material;
+                }
+
+                if (dummy.GetComponent<NetworkObject>() == null)
+                {
+                    dummy.AddComponent<NetworkObject>();
+                }
+
+                var health = dummy.GetComponent<Health>();
+                if (health == null)
+                {
+                    health = dummy.AddComponent<Health>();
+                }
+
+                var healthSerialized = new SerializedObject(health);
+                healthSerialized.FindProperty("maxHealth").floatValue = 100f;
+                healthSerialized.FindProperty("ignoreOwnerDamage").boolValue = false;
+                healthSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+                if (dummy.GetComponent<TargetDummy>() == null)
+                {
+                    dummy.AddComponent<TargetDummy>();
+                }
             }
         }
 

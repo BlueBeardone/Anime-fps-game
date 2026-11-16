@@ -113,6 +113,7 @@ GameObject:
   - component: {fileID: 1248408266948130146}
   - component: {fileID: 4340576479629155583}
   - component: {fileID: 8069260270364874723}
+  - component: {fileID: 5828241535074320973}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -174,7 +175,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 2396071181
+  GlobalObjectIdHash: 2209106619
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -452,6 +453,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 96f81e080a7f09648badcb1fd2e77687, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.UI.WeaponHud
+--- !u!114 &5828241535074320973
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6632739516172423482}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5444f8eda0dd4b4ea6169644f2f386b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Combat.PlayerRespawn
+  ShowTopMostFoldoutHeaderGroup: 1
+  health: {fileID: 1248408266948130146}
+  weapons: {fileID: 1441142932560822101}
+  controller: {fileID: 4094190679930455066}
+  respawnSeconds: 3
 --- !u!1 &6639496885551333599
 GameObject:
   m_ObjectHideFlags: 0

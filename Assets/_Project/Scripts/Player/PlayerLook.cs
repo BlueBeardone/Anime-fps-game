@@ -21,6 +21,7 @@ namespace AnimeFpsGame.Player
 
         InputAction lookAction;
         Camera playerCamera;
+        AnimeFpsGame.Combat.Health health;
         float pitch;
         float yaw;
         Vector2 recoilOffset;
@@ -29,6 +30,11 @@ namespace AnimeFpsGame.Player
         // Scene cameras we switched off for this session, restored when the player leaves.
         readonly List<Camera> disabledCameras = new();
         readonly List<AudioListener> disabledListeners = new();
+
+        void Awake()
+        {
+            health = GetComponent<AnimeFpsGame.Combat.Health>();
+        }
 
         public override void OnNetworkSpawn()
         {
@@ -115,6 +121,11 @@ namespace AnimeFpsGame.Player
         void Update()
         {
             if (lookAction == null)
+            {
+                return;
+            }
+
+            if (health != null && health.IsDead)
             {
                 return;
             }
