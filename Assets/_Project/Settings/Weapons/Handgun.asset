@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b53b31e8b9b337f4aa7d6f65470644db, type: 3}
+  m_Name: Handgun
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Weapons.GunStatsAsset
+  stats:
+    displayName: Handgun
+    archetype: 1
+    fireMode: 0
+    roundsPerMinute: 400
+    damage: 30
+    pellets: 1
+    magazineSize: 12
+    reserveAmmo: 60
+    reloadSeconds: 1.5
+    range: 100
+    baseSpreadDegrees: 0.2
+    bloomPerShotDegrees: 0.7
+    maxBloomDegrees: 3
+    bloomRecoveryDegreesPerSecond: 8
+    sprayResetSeconds: 0.4
+    pelletSpreadDegrees: 0

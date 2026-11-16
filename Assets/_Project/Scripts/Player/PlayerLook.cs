@@ -14,12 +14,17 @@ namespace AnimeFpsGame.Player
         [SerializeField] float sensitivity = 2f;
         [SerializeField] float minPitch = -85f;
         [SerializeField] float maxPitch = 85f;
+        [SerializeField] float recoilRecoverySpeed = 14f;
+        [SerializeField] float recoilRecoveryDelay = 0.15f;
 
         const float MouseScale = 0.1f;
 
         InputAction lookAction;
         Camera playerCamera;
         float pitch;
+        float yaw;
+        Vector2 recoilOffset;
+        float recoilIdleTime;
 
         // Scene cameras we switched off for this session, restored when the player leaves.
         readonly List<Camera> disabledCameras = new();
@@ -65,8 +70,16 @@ namespace AnimeFpsGame.Player
                 lookAction = input.actions["Look"];
             }
 
+            yaw = transform.eulerAngles.y;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        /// <summary>Adds camera recoil in degrees: x = yaw, y = pitch.</summary>
+        public void AddRecoil(Vector2 degrees)
+        {
+            recoilOffset += degrees;
+            recoilIdleTime = 0f;
         }
 
         public override void OnNetworkDespawn()
@@ -107,12 +120,22 @@ namespace AnimeFpsGame.Player
             }
 
             var look = lookAction.ReadValue<Vector2>() * (sensitivity * MouseScale);
-            transform.Rotate(Vector3.up, look.x, Space.Self);
-
+            yaw += look.x;
             pitch = Mathf.Clamp(pitch - look.y, minPitch, maxPitch);
+
+            recoilIdleTime += Time.deltaTime;
+            if (recoilIdleTime > recoilRecoveryDelay)
+            {
+                recoilOffset = Vector2.Lerp(recoilOffset, Vector2.zero,
+                    recoilRecoverySpeed * Time.deltaTime);
+            }
+
+            transform.localRotation = Quaternion.Euler(0f, yaw + recoilOffset.x, 0f);
+
             if (cameraPivot != null)
             {
-                cameraPivot.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+                var recoilPitch = Mathf.Clamp(pitch + recoilOffset.y, minPitch, maxPitch);
+                cameraPivot.localRotation = Quaternion.Euler(recoilPitch, 0f, 0f);
             }
         }
     }

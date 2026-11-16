@@ -1,3 +1,5 @@
+using AnimeFpsGame.Combat;
+using AnimeFpsGame.Weapons;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -5,8 +7,8 @@ using UnityEngine.InputSystem;
 namespace AnimeFpsGame.Player
 {
     /// <summary>
-    /// Main weapon + pistol. The active slot is a NetworkVariable so every client shows the same gun.
-    /// Firing is deliberately not implemented: it logs "shoot" locally and on the server.
+    /// Owns one persistent gun instance per serialized slot, routes owner input to the active gun,
+    /// drives the first-person viewmodel feel, and reports shots locally and to the server.
     /// </summary>
     public class PlayerWeapons : NetworkBehaviour
     {
@@ -21,19 +23,39 @@ namespace AnimeFpsGame.Player
         [SerializeField] Transform visualsRoot;
         [SerializeField] Animator animator;
         [SerializeField] Camera viewCamera;
+        [SerializeField] Health health;
 
         readonly NetworkVariable<byte> activeSlot = new(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        IGun[] guns;
+        IGun boundGun;
+        PlayerLook playerLook;
         InputAction attackAction;
+        InputAction reloadAction;
         InputAction nextAction;
         InputAction previousAction;
         GameObject currentViewmodel;
+        Vector3 viewmodelBasePosition;
+        Vector3 viewmodelBaseEuler;
+        float viewmodelKickBack;
+        float viewmodelKickUp;
         float lastScrollTime;
 
         public Camera ViewCamera => viewCamera;
+        public Health Health => health;
         public int CurrentSlot => activeSlot.Value;
+        public int SlotCount => slots?.Length ?? 0;
         public GameObject CurrentViewmodel => currentViewmodel;
+
+        public IGun ActiveGun =>
+            guns != null && CurrentSlot >= 0 && CurrentSlot < guns.Length ? guns[CurrentSlot] : null;
+
+        void Awake()
+        {
+            playerLook = GetComponent<PlayerLook>();
+            BuildGuns();
+        }
 
         public override void OnNetworkSpawn()
         {
@@ -50,14 +72,18 @@ namespace AnimeFpsGame.Player
             if (input != null && input.actions != null)
             {
                 attackAction = input.actions["Attack"];
+                reloadAction = input.actions["Reload"];
                 nextAction = input.actions["Next"];
                 previousAction = input.actions["Previous"];
             }
+
+            BindActiveGun();
         }
 
         public override void OnNetworkDespawn()
         {
             activeSlot.OnValueChanged -= OnSlotChanged;
+            UnbindGun();
         }
 
         void Update()
@@ -67,6 +93,99 @@ namespace AnimeFpsGame.Player
                 return;
             }
 
+            TickGuns();
+            HandleSlotInput();
+
+            if (health != null && health.IsDead)
+            {
+                UpdateViewmodelFeel();
+                return;
+            }
+
+            var gun = ActiveGun;
+            if (gun == null)
+            {
+                return;
+            }
+
+            if (reloadAction != null && reloadAction.WasPressedThisFrame())
+            {
+                gun.TryStartReload();
+            }
+
+            if (attackAction != null)
+            {
+                var pressed = attackAction.WasPressedThisFrame();
+                var held = attackAction.IsPressed();
+                if (pressed || held)
+                {
+                    TryFireActive(gun, pressed, held);
+                }
+            }
+
+            UpdateViewmodelFeel();
+        }
+
+        public void SetSlot(byte slot)
+        {
+            if (!IsOwner || slots == null || slots.Length == 0)
+            {
+                return;
+            }
+
+            activeSlot.Value = (byte)(slot % slots.Length);
+        }
+
+        public void ResetAmmo()
+        {
+            if (guns == null)
+            {
+                return;
+            }
+
+            foreach (var gun in guns)
+            {
+                gun?.ResetAmmo();
+            }
+        }
+
+        void BuildGuns()
+        {
+            if (slots == null)
+            {
+                guns = System.Array.Empty<IGun>();
+                return;
+            }
+
+            guns = new IGun[slots.Length];
+            for (var i = 0; i < slots.Length; i++)
+            {
+                var stats = slots[i] != null && slots[i].stats != null ? slots[i].stats.stats : null;
+                if (stats == null)
+                {
+                    Debug.LogError($"[PlayerWeapons] Slot {i} has no GunStatsAsset; run Anime FPS > Run All.");
+                    continue;
+                }
+
+                guns[i] = GunFactory.Create(stats);
+            }
+        }
+
+        void TickGuns()
+        {
+            if (guns == null)
+            {
+                return;
+            }
+
+            foreach (var gun in guns)
+            {
+                gun?.Tick(Time.deltaTime);
+            }
+        }
+
+        void HandleSlotInput()
+        {
             if (nextAction != null && nextAction.WasPressedThisFrame())
             {
                 SetSlot((byte)((activeSlot.Value + 1) % slots.Length));
@@ -84,26 +203,86 @@ namespace AnimeFpsGame.Player
                 lastScrollTime = Time.unscaledTime;
                 SetSlot((byte)((activeSlot.Value + (scroll > 0f ? 1 : slots.Length - 1)) % slots.Length));
             }
-
-            if (attackAction != null && attackAction.WasPressedThisFrame())
-            {
-                Debug.Log("shoot");
-                ShootServerRpc();
-            }
         }
 
-        public void SetSlot(byte slot)
+        void TryFireActive(IGun gun, bool pressed, bool held)
         {
-            if (!IsOwner || slots == null || slots.Length == 0)
+            var cameraTransform = viewCamera != null ? viewCamera.transform : transform;
+            if (!gun.TryFire(cameraTransform.position, cameraTransform.forward, Time.time,
+                    pressed, held, out var shot))
             {
                 return;
             }
 
-            activeSlot.Value = (byte)(slot % slots.Length);
+            shot.Slot = activeSlot.Value;
+
+            for (var i = 0; i < shot.Directions.Length; i++)
+            {
+                TryRaycast(shot.Origin, shot.Directions[i], shot.Range, transform, out _);
+            }
+
+            viewmodelKickBack += 0.02f;
+            viewmodelKickUp += UnityEngine.Random.Range(1.5f, 2.5f);
+        }
+
+        /// <summary>Nearest non-shooter hit for one ray; shared by local feedback and server validation.</summary>
+        public static bool TryRaycast(Vector3 origin, Vector3 direction, float range, Transform shooter,
+            out RaycastHit hit)
+        {
+            hit = default;
+            var hits = Physics.RaycastAll(origin, direction, range, ~0, QueryTriggerInteraction.Ignore);
+            var bestDistance = float.MaxValue;
+            var found = false;
+
+            foreach (var candidate in hits)
+            {
+                if (shooter != null && candidate.collider.transform.IsChildOf(shooter))
+                {
+                    continue;
+                }
+
+                if (candidate.distance < bestDistance)
+                {
+                    bestDistance = candidate.distance;
+                    hit = candidate;
+                    found = true;
+                }
+            }
+
+            return found;
+        }
+
+        void UpdateViewmodelFeel()
+        {
+            viewmodelKickBack = Mathf.Lerp(viewmodelKickBack, 0f, 12f * Time.deltaTime);
+            viewmodelKickUp = Mathf.Lerp(viewmodelKickUp, 0f, 12f * Time.deltaTime);
+
+            if (currentViewmodel == null)
+            {
+                return;
+            }
+
+            var gun = ActiveGun;
+            var reload01 = gun != null && gun.IsReloading
+                ? Mathf.Sin(gun.ReloadProgress01 * Mathf.PI)
+                : 0f;
+
+            currentViewmodel.transform.localPosition = viewmodelBasePosition + new Vector3(
+                0f,
+                -0.06f * reload01,
+                -viewmodelKickBack - 0.03f * reload01);
+
+            currentViewmodel.transform.localRotation = Quaternion.Euler(
+                viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01, 0f, 0f));
         }
 
         void OnSlotChanged(byte previous, byte current)
         {
+            if (guns != null && previous < guns.Length)
+            {
+                guns[previous]?.CancelReload();
+            }
+
             ApplySlot(current);
         }
 
@@ -124,8 +303,10 @@ namespace AnimeFpsGame.Player
             if (IsOwner && viewmodelAnchor != null && definition.viewmodelPrefab != null)
             {
                 currentViewmodel = Instantiate(definition.viewmodelPrefab, viewmodelAnchor);
-                currentViewmodel.transform.localPosition = definition.viewmodelLocalPosition;
-                currentViewmodel.transform.localRotation = Quaternion.Euler(definition.viewmodelLocalEuler);
+                viewmodelBasePosition = definition.viewmodelLocalPosition;
+                viewmodelBaseEuler = definition.viewmodelLocalEuler;
+                currentViewmodel.transform.localPosition = viewmodelBasePosition;
+                currentViewmodel.transform.localRotation = Quaternion.Euler(viewmodelBaseEuler);
                 currentViewmodel.transform.localScale = Vector3.one * definition.viewmodelScale;
             }
 
@@ -133,7 +314,7 @@ namespace AnimeFpsGame.Player
             {
                 foreach (var other in slots)
                 {
-                    if (!string.IsNullOrEmpty(other.animatorInt))
+                    if (other != null && !string.IsNullOrEmpty(other.animatorInt))
                     {
                         animator.SetInteger(other.animatorInt, 0);
                     }
@@ -143,6 +324,11 @@ namespace AnimeFpsGame.Player
             }
 
             ApplyVisibleWeaponMeshes(definition);
+
+            if (IsOwner)
+            {
+                BindActiveGun();
+            }
         }
 
         /// <summary>Own body is hidden from the owner's camera; other clients see the soldier and one gun.</summary>
@@ -172,10 +358,37 @@ namespace AnimeFpsGame.Player
             }
         }
 
-        [ServerRpc]
-        void ShootServerRpc()
+        void BindActiveGun()
         {
-            Debug.Log($"shoot from client {OwnerClientId}");
+            var gun = ActiveGun;
+            if (boundGun == gun)
+            {
+                return;
+            }
+
+            UnbindGun();
+            boundGun = gun;
+            if (boundGun != null)
+            {
+                boundGun.RecoilKicked += OnRecoilKicked;
+            }
+        }
+
+        void UnbindGun()
+        {
+            if (boundGun != null)
+            {
+                boundGun.RecoilKicked -= OnRecoilKicked;
+                boundGun = null;
+            }
+        }
+
+        void OnRecoilKicked(Vector2 degrees)
+        {
+            if (IsOwner && playerLook != null)
+            {
+                playerLook.AddRecoil(degrees);
+            }
         }
     }
 }
