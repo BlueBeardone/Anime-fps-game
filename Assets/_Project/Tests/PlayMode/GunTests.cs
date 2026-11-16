@@ -111,5 +111,90 @@ namespace AnimeFpsGame.Tests
             Assert.IsFalse(gun.IsReloading);
             Assert.AreEqual(2, gun.AmmoInMagazine);
         }
+
+        [Test]
+        public void BloomGrowsClampsAndRecovers()
+        {
+            var stats = TestStats();
+            stats.baseSpreadDegrees = 0f;
+            stats.bloomPerShotDegrees = 1f;
+            stats.maxBloomDegrees = 2f;
+            stats.bloomRecoveryDegreesPerSecond = 10f;
+            stats.roundsPerMinute = 6000f;
+            stats.magazineSize = 20;
+            stats.reserveAmmo = 0;
+            var gun = new Rifle(stats);
+
+            Fire(gun, 0f);
+            Assert.AreEqual(1f, gun.CurrentSpreadDegrees, 0.01f);
+            for (var i = 1; i <= 5; i++)
+            {
+                Fire(gun, i * 0.02f);
+            }
+
+            Assert.AreEqual(2f, gun.CurrentSpreadDegrees, 0.01f, "Bloom must clamp at max");
+            gun.Tick(0.2f);
+            Assert.Less(gun.CurrentSpreadDegrees, 2f, "Bloom must recover after firing stops");
+        }
+
+        [Test]
+        public void SprayKicksOnSecondShotAndResetsAfterGap()
+        {
+            var gun = new Rifle(TestStats());
+            var kicks = new System.Collections.Generic.List<Vector2>();
+            gun.RecoilKicked += kicks.Add;
+
+            Fire(gun, 0f);
+            Assert.AreEqual(Vector2.zero, kicks[0], "First shot has no pattern kick");
+            Fire(gun, 0.11f);
+            Assert.AreNotEqual(Vector2.zero, kicks[1], "Second shot follows the pattern");
+            gun.Tick(0.5f);
+            Fire(gun, 0.7f);
+            Assert.AreEqual(Vector2.zero, kicks[2], "Spray index resets after the delay");
+        }
+
+        [Test]
+        public void ShotgunEmitsConfiguredPelletsWithinCone()
+        {
+            var stats = Shotgun.CreateDefaultStats();
+            stats.pellets = 8;
+            stats.pelletSpreadDegrees = 3f;
+            var gun = new Shotgun(stats);
+
+            Assert.IsTrue(gun.TryFire(Vector3.zero, Vector3.forward, 0f, true, true, out var shot));
+            Assert.AreEqual(8, shot.Directions.Length);
+            foreach (var direction in shot.Directions)
+            {
+                Assert.LessOrEqual(Vector3.Angle(Vector3.forward, direction), 3.01f);
+            }
+        }
+
+        [Test]
+        public void ShotgunDamageIsPerPellet()
+        {
+            var stats = Shotgun.CreateDefaultStats();
+            stats.damage = 9f;
+            var gun = new Shotgun(stats);
+            Assert.IsTrue(gun.TryFire(Vector3.zero, Vector3.forward, 0f, true, true, out var shot));
+            Assert.AreEqual(9f, shot.Damage, 0.001f);
+        }
+
+        [Test]
+        public void FactoryCreatesTheConfiguredArchetype()
+        {
+            Assert.IsInstanceOf<Rifle>(GunFactory.Create(Rifle.CreateDefaultStats()));
+            Assert.IsInstanceOf<Handgun>(GunFactory.Create(Handgun.CreateDefaultStats()));
+            Assert.IsInstanceOf<Shotgun>(GunFactory.Create(Shotgun.CreateDefaultStats()));
+            Assert.IsInstanceOf<SubmachineGun>(GunFactory.Create(SubmachineGun.CreateDefaultStats()));
+        }
+
+        [Test]
+        public void GunStatsAssetHoldsStats()
+        {
+            var asset = ScriptableObject.CreateInstance<GunStatsAsset>();
+            asset.stats = Handgun.CreateDefaultStats();
+            Assert.AreEqual(GunArchetype.Handgun, asset.stats.archetype);
+            Object.DestroyImmediate(asset);
+        }
     }
 }

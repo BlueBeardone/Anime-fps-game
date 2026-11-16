@@ -11,11 +11,16 @@ namespace AnimeFpsGame.Weapons
     {
         readonly GunStats stats;
 
+        static readonly Vector2[] NoPattern = { Vector2.zero };
+
         int ammoInMagazine;
         int reserveAmmo;
         bool isReloading;
         float reloadRemaining;
         float nextFireTime = float.NegativeInfinity;
+        float bloomDegrees;
+        float timeSinceLastShot = 999f;
+        int sprayIndex;
 
         protected Gun(GunStats stats)
         {
@@ -28,7 +33,12 @@ namespace AnimeFpsGame.Weapons
         public int AmmoInMagazine => ammoInMagazine;
         public int ReserveAmmo => reserveAmmo;
         public bool IsReloading => isReloading;
-        public float CurrentSpreadDegrees => stats.baseSpreadDegrees;
+        public float CurrentSpreadDegrees => stats.baseSpreadDegrees + bloomDegrees;
+
+        protected virtual Vector2[] SprayPattern => NoPattern;
+        protected virtual int PelletCount => Mathf.Max(1, stats.pellets);
+        protected virtual float ShotSpreadDegrees =>
+            PelletCount > 1 ? stats.pelletSpreadDegrees : CurrentSpreadDegrees;
 
         public float ReloadProgress01
         {
@@ -59,6 +69,19 @@ namespace AnimeFpsGame.Weapons
 
         public virtual void Tick(float deltaTime)
         {
+            timeSinceLastShot += deltaTime;
+
+            if (timeSinceLastShot > 0.15f)
+            {
+                bloomDegrees = Mathf.MoveTowards(
+                    bloomDegrees, 0f, stats.bloomRecoveryDegreesPerSecond * deltaTime);
+            }
+
+            if (timeSinceLastShot > stats.sprayResetSeconds)
+            {
+                sprayIndex = 0;
+            }
+
             if (!isReloading)
             {
                 return;
@@ -91,17 +114,31 @@ namespace AnimeFpsGame.Weapons
                 return false;
             }
 
+            if (timeSinceLastShot > stats.sprayResetSeconds)
+            {
+                sprayIndex = 0;
+            }
+
+            var pattern = SprayPattern;
+            var index = Mathf.Clamp(sprayIndex, 0, pattern.Length - 1);
+            var previous = index > 0 ? pattern[index - 1] : Vector2.zero;
+            var kick = pattern[index] - previous;
+            sprayIndex = Mathf.Min(sprayIndex + 1, pattern.Length - 1);
+
             ammoInMagazine--;
             nextFireTime = now + 60f / Mathf.Max(1f, stats.roundsPerMinute);
+            timeSinceLastShot = 0f;
+            bloomDegrees = Mathf.Min(stats.maxBloomDegrees, bloomDegrees + stats.bloomPerShotDegrees);
 
             shot = new ShotSpec
             {
                 Origin = origin,
-                Directions = new[] { aimForward.normalized },
+                Directions = BuildDirections(aimForward),
                 Damage = stats.damage,
                 Range = stats.range
             };
 
+            RaiseRecoil(kick);
             AmmoChanged?.Invoke();
 
             if (ammoInMagazine <= 0 && reserveAmmo > 0)
@@ -121,6 +158,7 @@ namespace AnimeFpsGame.Weapons
 
             isReloading = true;
             reloadRemaining = stats.reloadSeconds;
+            sprayIndex = 0;
             ReloadStateChanged?.Invoke();
 
             if (reloadRemaining <= 0f)
@@ -150,6 +188,9 @@ namespace AnimeFpsGame.Weapons
             isReloading = false;
             reloadRemaining = 0f;
             nextFireTime = float.NegativeInfinity;
+            bloomDegrees = 0f;
+            timeSinceLastShot = 999f;
+            sprayIndex = 0;
             AmmoChanged?.Invoke();
             ReloadStateChanged?.Invoke();
         }
@@ -162,8 +203,32 @@ namespace AnimeFpsGame.Weapons
             reserveAmmo -= loaded;
             isReloading = false;
             reloadRemaining = 0f;
+            sprayIndex = 0;
             ReloadStateChanged?.Invoke();
             AmmoChanged?.Invoke();
+        }
+
+        /// <summary>One direction per pellet, scattered inside the current cone.</summary>
+        protected virtual Vector3[] BuildDirections(Vector3 aimForward)
+        {
+            var forward = aimForward.normalized;
+            var count = PelletCount;
+            var spread = Mathf.Max(0f, ShotSpreadDegrees);
+            var directions = new Vector3[count];
+
+            for (var i = 0; i < count; i++)
+            {
+                if (spread <= 0f)
+                {
+                    directions[i] = forward;
+                    continue;
+                }
+
+                var offset = UnityEngine.Random.insideUnitCircle * spread;
+                directions[i] = (Quaternion.Euler(-offset.y, offset.x, 0f) * forward).normalized;
+            }
+
+            return directions;
         }
 
         protected void RaiseRecoil(Vector2 degrees)
