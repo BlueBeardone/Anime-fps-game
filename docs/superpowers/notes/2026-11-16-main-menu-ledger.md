@@ -5,3 +5,13 @@ Ruling: use a manual ledger in `docs/superpowers/notes/` instead of `.superpower
 scripts require a git repo, and the plan itself says verification checkpoints replace commits.
 Pre-flight: shared interfaces are consistent (MainMenuController only in Tasks 1–2; build order in
 Task 2; startSinglePlayer only in Task 3).
+
+Setup update: user asked for git mid-task. Added `.gitignore` and committed the baseline at `3cdb86d`.
+Ruling: the Task 1 RED files (MainMenuTests, test asmdef) are inside that baseline commit — the user
+asked for git after they were written. From here each task gets its own commit.
+
+Task 1: complete — MainMenuController + 3 PlayMode tests (`MenuBuildsTheFiveExpectedButtons`,
+`SettingsClickKeepsTheCurrentScene`, `MenuReusesAnExistingEventSystem`). Command:
+`Unity -runTests -testPlatform PlayMode -testFilter AnimeFpsGame.Tests.MainMenuTests` → Passed 3/3, exit 0.
+
+
