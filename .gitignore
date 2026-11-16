@@ -32,5 +32,8 @@
 .DS_Store
 Thumbs.db
 
+# Unity test runner artifacts
+TestResults*.xml
+
 # Tool scratch
 .superpowers/
