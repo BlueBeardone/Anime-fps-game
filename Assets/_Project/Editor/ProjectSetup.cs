@@ -477,13 +477,18 @@ namespace AnimeFpsGame.EditorTools
             for (var i = 0; i < positions.Length; i++)
             {
                 var name = "TargetDummy " + (i + 1);
-                var existing = GameObject.Find(name);
-                var dummy = existing != null
-                    ? existing
-                    : GameObject.CreatePrimitive(PrimitiveType.Capsule);
-
-                dummy.name = name;
-                dummy.transform.position = positions[i];
+                var dummy = GameObject.Find(name);
+                if (dummy == null)
+                {
+                    dummy = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                    dummy.name = name;
+                    dummy.transform.position = positions[i];
+                }
+                else
+                {
+                    // Existing dummies keep any hand tuning from the editor.
+                    dummy.name = name;
+                }
 
                 var renderer = dummy.GetComponent<MeshRenderer>();
                 if (renderer != null)

@@ -24,6 +24,7 @@ namespace AnimeFpsGame.Effects
         readonly List<float> tracerExpiry = new();
         readonly List<Transform> puffs = new();
         readonly List<float> puffExpiry = new();
+        MaterialPropertyBlock colorBlock;
         LineRenderer[] tracerPool;
         Transform[] puffPool;
         Material tracerMaterial;
@@ -33,6 +34,7 @@ namespace AnimeFpsGame.Effects
 
         void Awake()
         {
+            colorBlock = new MaterialPropertyBlock();
             BuildPool();
         }
 
@@ -93,27 +95,75 @@ namespace AnimeFpsGame.Effects
 
             for (var i = tracers.Count - 1; i >= 0; i--)
             {
-                if (now >= tracerExpiry[i])
+                var remaining = tracerExpiry[i] - now;
+                if (remaining <= 0f)
                 {
                     tracers[i].gameObject.SetActive(false);
                     tracers.RemoveAt(i);
                     tracerExpiry.RemoveAt(i);
+                    continue;
                 }
+
+                var t = Mathf.Clamp01(remaining / TracerSeconds);
+                var line = tracers[i];
+                line.startWidth = 0.012f * t + 0.001f;
+                line.endWidth = 0.004f * t;
+                colorBlock.SetColor("_BaseColor", new Color(
+                    tracerColor.r, tracerColor.g, tracerColor.b, tracerColor.a * t));
+                line.SetPropertyBlock(colorBlock);
             }
 
             for (var i = puffs.Count - 1; i >= 0; i--)
             {
-                if (now >= puffExpiry[i])
+                var remaining = puffExpiry[i] - now;
+                if (remaining <= 0f)
                 {
                     puffs[i].gameObject.SetActive(false);
                     puffs.RemoveAt(i);
                     puffExpiry.RemoveAt(i);
+                    continue;
+                }
+
+                var t = Mathf.Clamp01(remaining / PuffSeconds);
+                var puff = puffs[i];
+                // Grow while fading out.
+                puff.localScale = Vector3.one * Mathf.Lerp(0.12f, 0.05f, t);
+                var puffRenderer = puff.GetComponent<MeshRenderer>();
+                if (puffRenderer != null)
+                {
+                    colorBlock.SetColor("_BaseColor", new Color(
+                        impactColor.r, impactColor.g, impactColor.b, impactColor.a * t));
+                    puffRenderer.SetPropertyBlock(colorBlock);
                 }
             }
 
             if (muzzleLight != null && muzzleLight.enabled && now >= muzzleExpiry)
             {
                 muzzleLight.enabled = false;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (puffPool != null)
+            {
+                foreach (var puff in puffPool)
+                {
+                    if (puff != null)
+                    {
+                        Destroy(puff.gameObject);
+                    }
+                }
+            }
+
+            if (tracerMaterial != null)
+            {
+                Destroy(tracerMaterial);
+            }
+
+            if (puffMaterial != null)
+            {
+                Destroy(puffMaterial);
             }
         }
 
@@ -168,7 +218,7 @@ namespace AnimeFpsGame.Effects
                 }
             }
 
-            return tracerPool.Length == 0 ? null : tracerPool[0];
+            return null;
         }
 
         Transform TakePuff()
@@ -181,7 +231,7 @@ namespace AnimeFpsGame.Effects
                 }
             }
 
-            return puffPool.Length == 0 ? null : puffPool[0];
+            return null;
         }
 
         void BuildPool()

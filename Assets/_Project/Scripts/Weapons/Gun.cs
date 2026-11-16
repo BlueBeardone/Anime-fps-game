@@ -171,6 +171,9 @@ namespace AnimeFpsGame.Weapons
 
         public void CancelReload()
         {
+            // A slot switch cancels the reload and must also start a fresh spray pattern.
+            sprayIndex = 0;
+
             if (!isReloading)
             {
                 return;

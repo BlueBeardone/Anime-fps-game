@@ -30,7 +30,7 @@ times out, allow the game through the Windows firewall on the host.
 | Mouse | look |
 | Shift | sprint |
 | Space | jump |
-| 1–4, or mouse wheel | Rifle / Handgun / SMG / Shotgun |
+| 1 / 2, or mouse wheel | cycle all four weapons (Rifle → Handgun → SMG → Shotgun) |
 | Left mouse | fire (hold for the full-auto Rifle and SMG) |
 | R | reload |
 
@@ -102,6 +102,5 @@ are separate prefabs, so they can be replaced independently.
 - No anime art yet; the WW2 pack is a placeholder.
 - LAN/IP only. Relay, lobbies and Accounts (Unity Multiplayer Services) are installed but unused.
 - Viewmodel placement is eyeballed and needs a tuning pass in the editor.
-- The shot server RPC is exercised by the headless combat test through `Health`, but the two-client
-  visual path (remote tracer/impact) still needs a manual host + client session.
+- The server-side shot validation is unit-covered only indirectly (the combat test drives `Health`); the two-client visual path and RPC-level validation still need a manual host + client session.
 - No CI.

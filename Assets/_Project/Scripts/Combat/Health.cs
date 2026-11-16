@@ -6,7 +6,8 @@ namespace AnimeFpsGame.Combat
 {
     /// <summary>
     /// Server-authoritative health. Players and dummies both use it; death state is replicated so
-    /// corpses stop blocking and absorbing shots on every client.
+    /// corpses stop blocking and absorbing shots on every peer. The clamp/death rules themselves
+    /// live in <see cref="HealthState"/> so they are tested without a scene or network.
     /// </summary>
     public class Health : NetworkBehaviour, IDamageable
     {
@@ -19,12 +20,25 @@ namespace AnimeFpsGame.Combat
         readonly NetworkVariable<bool> isDead = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-        public float MaxHealth => maxHealth;
-        public float CurrentHealth => currentHealth.Value;
-        public bool IsDead => isDead.Value;
+        HealthState state;
+        Collider[] bodyColliders;
+        bool[] colliderEnabledAtSpawn;
+        CharacterController controller;
+        bool controllerEnabledAtSpawn;
+
+        public float MaxHealth => state?.Max ?? maxHealth;
+        public float CurrentHealth => IsServer && state != null ? state.Current : currentHealth.Value;
+        public bool IsDead => IsServer && state != null ? state.IsDead : isDead.Value;
 
         public event Action Died;
         public event Action<bool> DeathStateChanged;
+
+        void Awake()
+        {
+            state = new HealthState(maxHealth);
+            controller = GetComponent<CharacterController>();
+            CacheBodyParts();
+        }
 
         public override void OnNetworkSpawn()
         {
@@ -32,7 +46,9 @@ namespace AnimeFpsGame.Combat
 
             if (IsServer)
             {
-                currentHealth.Value = maxHealth;
+                state ??= new HealthState(maxHealth);
+                state.Revive();
+                currentHealth.Value = state.Current;
                 isDead.Value = false;
             }
 
@@ -46,7 +62,13 @@ namespace AnimeFpsGame.Combat
 
         public void ApplyDamage(float amount, Vector3 point, Vector3 normal, ulong attackerClientId)
         {
-            if (!IsServer || IsDead || amount <= 0f)
+            if (!IsServer || amount <= 0f)
+            {
+                return;
+            }
+
+            state ??= new HealthState(maxHealth);
+            if (state.IsDead)
             {
                 return;
             }
@@ -56,8 +78,9 @@ namespace AnimeFpsGame.Combat
                 return;
             }
 
-            currentHealth.Value = Mathf.Max(0f, currentHealth.Value - amount);
-            if (currentHealth.Value <= 0f)
+            var died = state.ApplyDamage(amount);
+            currentHealth.Value = state.Current;
+            if (died)
             {
                 isDead.Value = true;
             }
@@ -70,7 +93,9 @@ namespace AnimeFpsGame.Combat
                 return;
             }
 
-            currentHealth.Value = maxHealth;
+            state ??= new HealthState(maxHealth);
+            state.Revive();
+            currentHealth.Value = state.Current;
             isDead.Value = false;
         }
 
@@ -85,18 +110,41 @@ namespace AnimeFpsGame.Combat
             }
         }
 
-        /// <summary>Colliders and the CharacterController are disabled on every peer while dead.</summary>
+        /// <summary>
+        /// Colliders and the CharacterController are disabled on every peer while dead, then
+        /// restored to exactly the enabled state they had at spawn — not blindly re-enabled.
+        /// </summary>
         void ApplyDeathState(bool dead)
         {
-            foreach (var bodyCollider in GetComponentsInChildren<Collider>(true))
+            if (bodyColliders == null)
             {
-                bodyCollider.enabled = !dead;
+                CacheBodyParts();
             }
 
-            if (TryGetComponent<CharacterController>(out var controller))
+            for (var i = 0; i < bodyColliders.Length; i++)
             {
-                controller.enabled = !dead;
+                if (bodyColliders[i] != null)
+                {
+                    bodyColliders[i].enabled = !dead && colliderEnabledAtSpawn[i];
+                }
             }
+
+            if (controller != null)
+            {
+                controller.enabled = !dead && controllerEnabledAtSpawn;
+            }
+        }
+
+        void CacheBodyParts()
+        {
+            bodyColliders = GetComponentsInChildren<Collider>(true);
+            colliderEnabledAtSpawn = new bool[bodyColliders.Length];
+            for (var i = 0; i < bodyColliders.Length; i++)
+            {
+                colliderEnabledAtSpawn[i] = bodyColliders[i] != null && bodyColliders[i].enabled;
+            }
+
+            controllerEnabledAtSpawn = controller != null && controller.enabled;
         }
     }
 }

@@ -46,6 +46,7 @@ namespace AnimeFpsGame.Player
         float viewmodelKickUp;
         float lastScrollTime;
         float[] serverNextShotTime;
+        float serverNextAnyShotTime;
 
         public Camera ViewCamera => viewCamera;
         public Health Health => health;
@@ -327,6 +328,12 @@ namespace AnimeFpsGame.Player
             }
 
             var now = Time.time;
+            // One global floor stops a client from alternating slots to beat the per-slot cadence.
+            if (now < serverNextAnyShotTime)
+            {
+                return;
+            }
+
             if (now < serverNextShotTime[slot])
             {
                 return;
@@ -361,7 +368,8 @@ namespace AnimeFpsGame.Player
             }
 
             // A small tolerance keeps client/server frame jitter from rejecting legitimate shots.
-            serverNextShotTime[slot] = now + 60f / Mathf.Max(1f, stats.roundsPerMinute) * 0.9f;
+            serverNextShotTime[slot] = now + 60f / Mathf.Max(1f, stats.roundsPerMinute) * 0.8f;
+            serverNextAnyShotTime = now + 0.06f;
 
             var points = new List<Vector3>(validated.Count);
             var normals = new List<Vector3>(validated.Count);
@@ -507,6 +515,8 @@ namespace AnimeFpsGame.Player
                 currentViewmodel.transform.localPosition = viewmodelBasePosition;
                 currentViewmodel.transform.localRotation = Quaternion.Euler(viewmodelBaseEuler);
                 currentViewmodel.transform.localScale = Vector3.one * definition.viewmodelScale;
+                // Switching slots while dead must not bring the gun back on screen.
+                currentViewmodel.SetActive(!IsDead);
             }
 
             if (animator != null && !string.IsNullOrEmpty(definition.animatorInt))

@@ -113,6 +113,22 @@ namespace AnimeFpsGame.Tests
         }
 
         [Test]
+        public void CancelReloadResetsSprayPattern()
+        {
+            var gun = new Rifle(TestStats());
+            var kicks = new System.Collections.Generic.List<Vector2>();
+            gun.RecoilKicked += kicks.Add;
+
+            Fire(gun, 0f);
+            Fire(gun, 0.11f);
+            Assert.AreNotEqual(Vector2.zero, kicks[1]);
+
+            gun.CancelReload();
+            Fire(gun, 0.22f);
+            Assert.AreEqual(Vector2.zero, kicks[2], "A new pattern starts after a slot switch");
+        }
+
+        [Test]
         public void BloomGrowsClampsAndRecovers()
         {
             var stats = TestStats();

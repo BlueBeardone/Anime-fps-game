@@ -19,6 +19,7 @@ namespace AnimeFpsGame.UI
         GameObject canvasRoot;
         Image[] bars;
         Text ammoText;
+        Text reloadLabel;
         Image reloadBar;
         bool built;
 
@@ -61,19 +62,35 @@ namespace AnimeFpsGame.UI
                 Build();
             }
 
+            if (weapons.IsDead)
+            {
+                canvasRoot.SetActive(false);
+                return;
+            }
+
+            if (!canvasRoot.activeSelf)
+            {
+                canvasRoot.SetActive(true);
+            }
+
             var gun = weapons.ActiveGun;
             if (gun == null)
             {
                 return;
             }
 
-            var gap = ComputeCrosshairGap(
-                gun.CurrentSpreadDegrees,
-                gun.Stats.maxBloomDegrees + gun.Stats.baseSpreadDegrees);
+            // Shots are fixed-cone for the shotgun, so its crosshair must not follow bloom.
+            var isShotgun = gun.Stats.pellets > 1;
+            var spread = isShotgun ? gun.Stats.pelletSpreadDegrees : gun.CurrentSpreadDegrees;
+            var maxSpread = isShotgun
+                ? gun.Stats.pelletSpreadDegrees * 2f
+                : gun.Stats.maxBloomDegrees + gun.Stats.baseSpreadDegrees;
 
-            SetGap(gap);
+            SetGap(ComputeCrosshairGap(spread, maxSpread));
             ammoText.text = $"{gun.AmmoInMagazine} / {gun.ReserveAmmo}";
-            reloadBar.transform.parent.gameObject.SetActive(gun.IsReloading);
+            var reloading = gun.IsReloading;
+            reloadBar.transform.parent.gameObject.SetActive(reloading);
+            reloadLabel.gameObject.SetActive(reloading);
             reloadBar.fillAmount = gun.ReloadProgress01;
         }
 
@@ -116,6 +133,17 @@ namespace AnimeFpsGame.UI
             reloadRect.pivot = new Vector2(0.5f, 0f);
             reloadRect.anchoredPosition = new Vector2(0f, 90f);
             reloadRect.sizeDelta = new Vector2(160f, 8f);
+
+            reloadLabel = CreateText("ReloadLabel", canvasRoot.transform, font, 20);
+            var labelRect = reloadLabel.rectTransform;
+            labelRect.anchorMin = new Vector2(0.5f, 0f);
+            labelRect.anchorMax = new Vector2(0.5f, 0f);
+            labelRect.pivot = new Vector2(0.5f, 0f);
+            labelRect.anchoredPosition = new Vector2(0f, 102f);
+            labelRect.sizeDelta = new Vector2(200f, 26f);
+            reloadLabel.alignment = TextAnchor.LowerCenter;
+            reloadLabel.text = "Reloading";
+            reloadLabel.gameObject.SetActive(false);
 
             reloadBar = CreateImage("ReloadFill", reloadBackground.transform,
                 new Color(1f, 0.85f, 0.3f, 0.95f));
