@@ -38,10 +38,38 @@ namespace AnimeFpsGame.Menu
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
 
+            if (HasSessionCommandLine(System.Environment.GetCommandLineArgs()))
+            {
+                StartRange();
+                return;
+            }
+
             if (EventSystem.current != null)
             {
                 EventSystem.current.SetSelectedGameObject(GetButton(RangeLabel).gameObject);
             }
+        }
+
+        /// <summary>
+        /// Keeps the existing dev flags working: launching with `-host` or `-join` skips the menu so
+        /// NetworkBootstrap can start the requested session.
+        /// </summary>
+        public static bool HasSessionCommandLine(string[] args)
+        {
+            if (args == null)
+            {
+                return false;
+            }
+
+            foreach (var arg in args)
+            {
+                if (arg == "-host" || arg == "-join")
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public Button GetButton(string label)

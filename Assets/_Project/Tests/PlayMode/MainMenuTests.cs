@@ -95,5 +95,13 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(Object.FindAnyObjectByType<MainMenuController>());
             Assert.IsNotNull(Object.FindAnyObjectByType<EventSystem>());
         }
+
+        [Test]
+        public void SessionCommandLineIsDetected()
+        {
+            Assert.IsTrue(MainMenuController.HasSessionCommandLine(new[] { "game.exe", "-host" }));
+            Assert.IsTrue(MainMenuController.HasSessionCommandLine(new[] { "game.exe", "-join", "127.0.0.1" }));
+            Assert.IsFalse(MainMenuController.HasSessionCommandLine(new[] { "game.exe", "-batchmode" }));
+        }
     }
 }

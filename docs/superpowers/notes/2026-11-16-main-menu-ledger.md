@@ -25,6 +25,14 @@ Task 3: complete — `NetworkBootstrap.startSinglePlayer` auto-hosts, `HostJoinM
 `Main.unity` regenerated. Command: `Unity -runTests -testFilter AnimeFpsGame.Tests.PlayerSmokeTests` →
 Passed 2/2, exit 0.
 
+Task 4: Ruling: preserve the documented `-host` / `-join` dev flags by having `MainMenuController.Start`
+auto-enter Range when either flag is present; added `HasSessionCommandLine` with a RED→GREEN test. This
+was a plan gap — with the menu as build index 0, the flags would otherwise be ignored until a click.
+Cost if wrong: a dev passing the flag skips the menu, which is the intended dev behaviour.
+Task 4: complete — notes updated; full PlayMode suite: `Unity -runTests -testPlatform PlayMode` →
+Passed 8/8 (6 menu + 2 range), exit 0; no compiler errors or unhandled log messages.
+
+
 
 
 

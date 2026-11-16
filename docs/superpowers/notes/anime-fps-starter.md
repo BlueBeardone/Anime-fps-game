@@ -3,11 +3,13 @@
 ## Run it
 
 1. Open the project (`D:\Making Games\Anime fps game`) in Unity **6000.6.9f1**.
-2. Open `Assets/_Project/Scenes/Main.unity` (already in Build Settings).
-3. Press Play. The **Host / Join** panel appears.
-4. Click **Host** to play alone, or start a second instance and **Join** `127.0.0.1`.
+2. Open `Assets/_Project/Scenes/MainMenu.unity` (build index 0; the game starts here).
+3. Press Play. The main menu appears: **Campaign**, **Multiplayer**, **Range**, **Settings**, **Exit**.
+4. Click **Range** to enter the empty test field as a single player. Campaign and Multiplayer are
+   greyed out; Settings is a placeholder; Exit quits (or stops Play Mode in the editor).
 
-Two clients without the editor (a build already exists in `Builds/Windows`):
+Two clients without the editor (a build already exists in `Builds/Windows`). `-host` / `-join` skip the
+menu and start the requested session directly:
 
 ```powershell
 # host
@@ -41,7 +43,9 @@ Assets/_Project/
   Art/WW2_German_Soldiers/     placeholder soldier, guns, demo scene
   Prefabs/Player/Player.prefab the networked player (CharacterController, camera, weapons)
   Prefabs/Weapons/             K98 / Luger first-person viewmodels
-  Scenes/Main.unity            ground, light, NetworkManager, host/join menu
+  Scenes/MainMenu.unity        startup menu (Campaign, Multiplayer, Range, Settings, Exit)
+  Scenes/Main.unity            ground, light, NetworkManager, solo auto-host
+  Scripts/Menu/                MainMenuController
   Scripts/Player/              PlayerMotor, PlayerLook, PlayerWeapons, WeaponDefinition
   Scripts/Networking/          NetworkBootstrap, HostJoinMenu
   Editor/ProjectSetup.cs       one-shot generator (Anime FPS menu)
@@ -75,6 +79,8 @@ are separate prefabs, so they can be replaced independently.
 ## Known gaps (on purpose)
 
 - No aiming, shooting, damage, health or respawn — fire only logs.
+- Main menu Campaign/Multiplayer/Settings are placeholders. Range runs a solo local host, not a true
+  offline mode. There is no pause or return-to-menu yet.
 - No anime art yet; the WW2 pack is a placeholder.
 - LAN/IP only. Relay, lobbies and Accounts (Unity Multiplayer Services) are installed but unused.
 - Viewmodel placement is eyeballed and needs a tuning pass in the editor.
