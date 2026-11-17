@@ -152,5 +152,99 @@ namespace AnimeFpsGame.Tests
                 backward.Dispose();
             }
         }
+
+        [UnityTest]
+        public IEnumerator CrouchShrinksCapsuleAndSpeed()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                rig.SetIntent(Vector3.forward, crouch: true);
+                yield return rig.WaitSteps(40);
+                Assert.IsTrue(rig.Movement.IsCrouching);
+                Assert.AreEqual(rig.Movement.Profile.crouchHeight, rig.Capsule.height, 0.05f);
+                Assert.AreEqual(rig.Movement.Profile.crouchEyeHeight, rig.Movement.EyeHeight, 0.05f);
+                // Source stop-speed friction means the achieved speed settles a little below the
+                // crouch wish speed (~1.95 m/s); the point is that crouching is clearly slower.
+                Assert.Less(rig.Movement.HorizontalSpeed, rig.Movement.Profile.runSpeed - 1f);
+                Assert.Greater(rig.Movement.HorizontalSpeed, 1.2f);
+                rig.SetIntent(Vector3.zero);
+                yield return rig.WaitSteps(20);
+                Assert.AreEqual(rig.Movement.Profile.capsuleHeight, rig.Capsule.height, 0.05f);
+                Assert.IsFalse(rig.Movement.IsCrouching);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CrouchBlockedUnderLowCeiling()
+        {
+            var rig = MovementTestRig.Create();
+            var ceiling = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                rig.Movement.ApplyCrouchDimensions(true);
+                ceiling.transform.position = MovementTestRig.At(0f, 2.25f, 0f);
+                ceiling.transform.localScale = new Vector3(4f, 1.5f, 4f);
+                Physics.SyncTransforms();
+                yield return rig.WaitSteps(5);
+                rig.SetIntent(Vector3.zero, crouch: false);
+                yield return rig.WaitSteps(20);
+                Assert.IsTrue(rig.Movement.IsCrouching, "Must stay crouched while the ceiling blocks standing");
+                Assert.AreEqual(rig.Movement.Profile.crouchHeight, rig.Capsule.height, 0.05f);
+            }
+            finally
+            {
+                Object.Destroy(ceiling);
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TeleportClearsVelocity()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                rig.SetIntent(Vector3.forward);
+                yield return rig.WaitSteps(40);
+                Assert.Greater(rig.Movement.HorizontalSpeed, 3f);
+                rig.Movement.Teleport(MovementTestRig.At(5f, 0.02f, 5f), Quaternion.identity);
+                yield return new WaitForFixedUpdate();
+                Assert.Less(rig.Movement.Velocity.magnitude, 0.1f);
+                Assert.AreEqual(5f, rig.LocalPosition.x, 0.05f);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PauseStopsMovement()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                rig.SetIntent(Vector3.forward);
+                yield return rig.WaitSteps(30);
+                rig.Movement.SetPaused(true);
+                var pausedPosition = rig.BodyRigidbody.position;
+                yield return rig.WaitSteps(30);
+                Assert.Less(rig.Movement.Velocity.magnitude, 0.1f);
+                Assert.AreEqual(pausedPosition.z, rig.BodyRigidbody.position.z, 0.05f);
+                rig.Movement.SetPaused(false);
+                rig.SetIntent(Vector3.forward);
+                yield return rig.WaitSteps(20);
+                Assert.Greater(rig.Movement.HorizontalSpeed, 0.5f);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
     }
 }

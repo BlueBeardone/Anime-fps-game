@@ -24,10 +24,13 @@ namespace AnimeFpsGame.Movement
 
         Vector3 wishDirection;
         bool sprintHeld;
+        bool crouchHeld;
         bool jumpHeld;
         bool paused;
         bool grounded;
         bool sprinting;
+        bool crouchTarget;
+        float crouchT;
         float lastGroundedTime = float.NegativeInfinity;
         float jumpBufferExpiry = float.NegativeInfinity;
 
@@ -43,14 +46,17 @@ namespace AnimeFpsGame.Movement
 
         public MovementState State { get; private set; }
         public bool IsGrounded => grounded;
-        public bool IsCrouching => false;
+        public bool IsCrouching => crouchTarget;
         public bool IsSprinting => sprinting;
         public bool IsSliding => false;
         public float HorizontalSpeed => Horizontal(body.linearVelocity).magnitude;
         public Vector3 Velocity => body.linearVelocity;
-        public float EyeHeight => profile != null ? profile.eyeHeight : 1.65f;
+        public float EyeHeight => profile != null
+            ? Mathf.Lerp(profile.eyeHeight, profile.crouchEyeHeight, crouchT)
+            : 1.65f;
 
         public event Action Jumped;
+        public event Action<bool> CrouchChanged;
 
         void Awake()
         {
@@ -79,6 +85,7 @@ namespace AnimeFpsGame.Movement
             direction.y = 0f;
             wishDirection = Vector3.ClampMagnitude(direction, 1f);
             sprintHeld = intent.Sprint;
+            crouchHeld = intent.Crouch;
 
             // A jump is only queued on the rising edge, so holding the button never auto-bhops.
             if (intent.Jump && !jumpHeld)
@@ -95,6 +102,7 @@ namespace AnimeFpsGame.Movement
             body.rotation = rotation;
             body.linearVelocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
+            ClearIntent();
             lastGroundedTime = float.NegativeInfinity;
             grounded = false;
             Physics.SyncTransforms();
@@ -117,14 +125,22 @@ namespace AnimeFpsGame.Movement
             body.angularVelocity = Vector3.zero;
         }
 
+        /// <summary>
+        /// Instantly resize to a crouched or standing capsule. Used by network proxies so their body
+        /// (and therefore server hit validation) matches the owner.
+        /// </summary>
         public void ApplyCrouchDimensions(bool crouched)
         {
+            crouchT = crouched ? 1f : 0f;
+            SetCrouchTarget(crouched);
+            ApplyCapsule(crouchT);
         }
 
         void ClearIntent()
         {
             wishDirection = Vector3.zero;
             sprintHeld = false;
+            crouchHeld = false;
             jumpHeld = false;
             jumpBufferExpiry = float.NegativeInfinity;
         }
@@ -138,6 +154,7 @@ namespace AnimeFpsGame.Movement
 
             var dt = Time.fixedDeltaTime;
             UpdateGrounded();
+            UpdateCrouch(dt);
 
             var velocity = body.linearVelocity;
             var horizontal = Horizontal(velocity);
@@ -153,7 +170,10 @@ namespace AnimeFpsGame.Movement
                 ApplyFriction(ref horizontal, dt);
                 ApplyAcceleration(ref horizontal, wishDirection, WishSpeed,
                     profile.groundAcceleration, dt);
-                vertical = -profile.groundStickSpeed;
+
+                // Contacts keep the capsule on the ground; never force downward velocity (that would
+                // fight the solver and make a freshly teleported body report speed).
+                vertical = Mathf.Min(vertical, 0f);
             }
             else
             {
@@ -169,11 +189,62 @@ namespace AnimeFpsGame.Movement
             UpdateState(horizontal);
         }
 
-        float WishSpeed => sprinting ? profile.sprintSpeed : profile.runSpeed;
+        float WishSpeed => crouchTarget
+            ? profile.crouchSpeed
+            : sprinting ? profile.sprintSpeed : profile.runSpeed;
+
+        void UpdateCrouch(float dt)
+        {
+            var desired = crouchHeld;
+            if (!desired && crouchTarget && IsStandingBlocked())
+            {
+                desired = true;
+            }
+
+            SetCrouchTarget(desired);
+
+            var target = crouchTarget ? 1f : 0f;
+            if (Mathf.Approximately(crouchT, target))
+            {
+                return;
+            }
+
+            var step = dt / Mathf.Max(profile.crouchTransition, 0.0001f);
+            crouchT = Mathf.MoveTowards(crouchT, target, step);
+            ApplyCapsule(crouchT);
+        }
+
+        void SetCrouchTarget(bool value)
+        {
+            if (crouchTarget == value)
+            {
+                return;
+            }
+
+            crouchTarget = value;
+            CrouchChanged?.Invoke(value);
+        }
+
+        void ApplyCapsule(float t)
+        {
+            var height = Mathf.Lerp(profile.capsuleHeight, profile.crouchHeight, t);
+            height = Mathf.Max(height, capsule.radius * 2f);
+            capsule.height = height;
+            capsule.center = new Vector3(0f, height * 0.5f, 0f);
+        }
+
+        bool IsStandingBlocked()
+        {
+            var radius = capsule.radius * 0.95f;
+            var bottom = body.position + Vector3.up * (radius + 0.05f);
+            var top = body.position + Vector3.up * (profile.capsuleHeight - radius - 0.05f);
+            return Physics.CheckCapsule(bottom, top, radius, groundMask, QueryTriggerInteraction.Ignore);
+        }
 
         void UpdateSprint()
         {
             sprinting = sprintHeld
+                && !crouchTarget
                 && wishDirection.sqrMagnitude > 0.0001f
                 && Vector3.Dot(transform.forward, wishDirection) >= profile.sprintForwardDot;
         }
@@ -274,6 +345,11 @@ namespace AnimeFpsGame.Movement
             if (sprinting)
             {
                 state |= MovementState.Sprinting;
+            }
+
+            if (crouchTarget)
+            {
+                state |= MovementState.Crouching;
             }
 
             if (horizontal.magnitude > MovingSpeedThreshold)
