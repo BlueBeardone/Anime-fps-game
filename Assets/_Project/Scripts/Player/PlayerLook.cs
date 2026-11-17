@@ -12,6 +12,8 @@ namespace AnimeFpsGame.Player
     {
         [SerializeField] Transform cameraPivot;
         [SerializeField] InputReader input;
+        [SerializeField] AnimeFpsGame.Movement.CharacterMovement movement;
+        [SerializeField] Rigidbody body;
         [SerializeField] float sensitivity = 2f;
         [SerializeField] float minPitch = -85f;
         [SerializeField] float maxPitch = 85f;
@@ -27,6 +29,8 @@ namespace AnimeFpsGame.Player
         Vector2 recoilOffset;
         float recoilIdleTime;
 
+        public float Yaw => yaw;
+
         // Scene cameras we switched off for this session, restored when the player leaves.
         readonly List<Camera> disabledCameras = new();
         readonly List<AudioListener> disabledListeners = new();
@@ -35,6 +39,18 @@ namespace AnimeFpsGame.Player
         {
             health = GetComponent<AnimeFpsGame.Combat.Health>();
             input ??= GetComponent<InputReader>();
+            movement ??= GetComponent<AnimeFpsGame.Movement.CharacterMovement>();
+            body ??= GetComponent<Rigidbody>();
+        }
+
+        /// <summary>Immediately sets the body facing, used after a respawn teleport.</summary>
+        public void SetYaw(float degrees)
+        {
+            yaw = degrees;
+            if (body != null)
+            {
+                body.rotation = Quaternion.Euler(0f, yaw, 0f);
+            }
         }
 
         public override void OnNetworkSpawn()
@@ -71,7 +87,7 @@ namespace AnimeFpsGame.Player
                 }
             }
 
-            yaw = transform.eulerAngles.y;
+            yaw = body != null ? body.rotation.eulerAngles.y : transform.eulerAngles.y;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
@@ -129,6 +145,11 @@ namespace AnimeFpsGame.Player
             yaw += look.x;
             pitch = Mathf.Clamp(pitch - look.y, minPitch, maxPitch);
 
+            if (movement != null && cameraPivot != null)
+            {
+                cameraPivot.localPosition = new Vector3(0f, movement.EyeHeight, 0f);
+            }
+
             recoilIdleTime += Time.deltaTime;
             if (recoilIdleTime > recoilRecoveryDelay)
             {
@@ -136,12 +157,18 @@ namespace AnimeFpsGame.Player
                     recoilRecoverySpeed * Time.deltaTime);
             }
 
-            transform.localRotation = Quaternion.Euler(0f, yaw + recoilOffset.x, 0f);
-
             if (cameraPivot != null)
             {
                 var recoilPitch = Mathf.Clamp(pitch + recoilOffset.y, minPitch, maxPitch);
                 cameraPivot.localRotation = Quaternion.Euler(recoilPitch, 0f, 0f);
+            }
+        }
+
+        void FixedUpdate()
+        {
+            if (body != null)
+            {
+                body.MoveRotation(Quaternion.Euler(0f, yaw + recoilOffset.x, 0f));
             }
         }
     }

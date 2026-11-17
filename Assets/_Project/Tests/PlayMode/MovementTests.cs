@@ -330,5 +330,25 @@ namespace AnimeFpsGame.Tests
                 rig.Dispose();
             }
         }
+
+        [UnityTest]
+        public IEnumerator ProxyCrouchResizesCapsule()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                yield return rig.WaitSteps(5);
+                rig.Movement.ApplyCrouchDimensions(true);
+                Assert.IsTrue(rig.Movement.IsCrouching);
+                Assert.AreEqual(rig.Movement.Profile.crouchHeight, rig.Capsule.height, 0.05f);
+                rig.Movement.ApplyCrouchDimensions(false);
+                Assert.IsFalse(rig.Movement.IsCrouching);
+                Assert.AreEqual(rig.Movement.Profile.capsuleHeight, rig.Capsule.height, 0.05f);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
     }
 }

@@ -72,6 +72,12 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(weapons.GetComponent<Player.PlayerLook>(), "Spawned player has PlayerLook");
             Assert.IsNotNull(weapons.GetComponent<UnityEngine.InputSystem.PlayerInput>(), "Spawned player has PlayerInput");
             Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Input.InputReader>(), "Spawned player has InputReader");
+            var body = weapons.GetComponent<Rigidbody>();
+            Assert.IsNotNull(body, "Player body is a Rigidbody");
+            Assert.IsNotNull(weapons.GetComponent<CapsuleCollider>(), "Player body has a capsule");
+            Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>(), "Player uses CharacterMovement");
+            Assert.IsNull(weapons.GetComponent<CharacterController>(), "CharacterController must be gone");
+            Assert.IsFalse(body.isKinematic, "The owner simulates the body");
 
             weapons.SetSlot(1);
             yield return null;

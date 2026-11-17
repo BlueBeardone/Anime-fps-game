@@ -23,8 +23,6 @@ namespace AnimeFpsGame.Combat
         HealthState state;
         Collider[] bodyColliders;
         bool[] colliderEnabledAtSpawn;
-        CharacterController controller;
-        bool controllerEnabledAtSpawn;
 
         public float MaxHealth => state?.Max ?? maxHealth;
         public float CurrentHealth => IsServer && state != null ? state.Current : currentHealth.Value;
@@ -36,7 +34,6 @@ namespace AnimeFpsGame.Combat
         void Awake()
         {
             state = new HealthState(maxHealth);
-            controller = GetComponent<CharacterController>();
             CacheBodyParts();
         }
 
@@ -111,8 +108,8 @@ namespace AnimeFpsGame.Combat
         }
 
         /// <summary>
-        /// Colliders and the CharacterController are disabled on every peer while dead, then
-        /// restored to exactly the enabled state they had at spawn — not blindly re-enabled.
+        /// Colliders are disabled on every peer while dead, then restored to exactly the enabled
+        /// state they had at spawn — not blindly re-enabled.
         /// </summary>
         void ApplyDeathState(bool dead)
         {
@@ -128,11 +125,6 @@ namespace AnimeFpsGame.Combat
                     bodyColliders[i].enabled = !dead && colliderEnabledAtSpawn[i];
                 }
             }
-
-            if (controller != null)
-            {
-                controller.enabled = !dead && controllerEnabledAtSpawn;
-            }
         }
 
         void CacheBodyParts()
@@ -143,8 +135,6 @@ namespace AnimeFpsGame.Combat
             {
                 colliderEnabledAtSpawn[i] = bodyColliders[i] != null && bodyColliders[i].enabled;
             }
-
-            controllerEnabledAtSpawn = controller != null && controller.enabled;
         }
     }
 }

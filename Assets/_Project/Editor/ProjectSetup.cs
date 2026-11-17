@@ -282,11 +282,24 @@ namespace AnimeFpsGame.EditorTools
             EnsureReloadAction();
 
             var root = new GameObject("Player");
-            var controller = root.AddComponent<CharacterController>();
-            controller.height = 1.8f;
-            controller.radius = 0.3f;
-            controller.center = new Vector3(0f, 0.9f, 0f);
-            controller.slopeLimit = 50f;
+            var playerLayer = EnsureLayer("Player");
+            var playerMaterial = EnsurePlayerPhysicsMaterial();
+            var movementProfile = EnsureMovementProfile();
+            var body = root.AddComponent<Rigidbody>();
+            body.mass = movementProfile.playerMass;
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+
+            var capsule = root.AddComponent<CapsuleCollider>();
+            capsule.height = movementProfile.capsuleHeight;
+            capsule.radius = 0.3f;
+            capsule.center = new Vector3(0f, movementProfile.capsuleHeight * 0.5f, 0f);
+            capsule.sharedMaterial = playerMaterial;
+
+            var movement = root.AddComponent<AnimeFpsGame.Movement.CharacterMovement>();
+            SetReference(movement, "profile", movementProfile);
 
             root.AddComponent<NetworkObject>();
             var networkTransform = root.AddComponent<NetworkTransform>();
@@ -338,6 +351,8 @@ namespace AnimeFpsGame.EditorTools
             var look = root.AddComponent<AnimeFpsGame.Player.PlayerLook>();
             SetReference(look, "cameraPivot", pivot.transform);
             SetReference(look, "input", inputReader);
+            SetReference(look, "movement", movement);
+            SetReference(look, "body", body);
 
             var weapons = root.AddComponent<AnimeFpsGame.Player.PlayerWeapons>();
             var health = root.AddComponent<Health>();
@@ -354,7 +369,12 @@ namespace AnimeFpsGame.EditorTools
             var respawn = root.AddComponent<PlayerRespawn>();
             SetReference(respawn, "health", health);
             SetReference(respawn, "weapons", weapons);
-            SetReference(respawn, "controller", controller);
+            SetReference(respawn, "movement", movement);
+            SetReference(respawn, "playerLook", look);
+            SetReference(motor, "movement", movement);
+            SetReference(motor, "input", inputReader);
+            SetReference(motor, "playerLook", look);
+            SetReference(motor, "health", health);
 
             var weaponsSerialized = new SerializedObject(weapons);
             var slots = weaponsSerialized.FindProperty("slots");
@@ -368,6 +388,8 @@ namespace AnimeFpsGame.EditorTools
             ConfigureSlot(slots.GetArrayElementAtIndex(3), "Shotgun", "status_k98", "K98", k98Viewmodel,
                 new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.08f, shotgunStats);
             weaponsSerialized.ApplyModifiedPropertiesWithoutUndo();
+
+            SetLayerRecursively(root, playerLayer);
 
             PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);
@@ -521,6 +543,104 @@ namespace AnimeFpsGame.EditorTools
                     dummy.AddComponent<TargetDummy>();
                 }
             }
+        }
+
+        /// <summary>
+        /// Finds a layer by name, or claims the first empty user layer (6..31) if it is missing.
+        /// Returns 0 (Default) only if every user layer is taken.
+        /// </summary>
+        static int EnsureLayer(string name)
+        {
+            var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset");
+            if (assets == null || assets.Length == 0)
+            {
+                Debug.LogError("[ProjectSetup] TagManager.asset not found; player stays on Default");
+                return 0;
+            }
+
+            var tagManager = new SerializedObject(assets[0]);
+            var layers = tagManager.FindProperty("layers");
+
+            var firstFree = -1;
+            for (var i = 6; i < layers.arraySize; i++)
+            {
+                var value = layers.GetArrayElementAtIndex(i).stringValue;
+                if (value == name)
+                {
+                    return i;
+                }
+
+                if (firstFree < 0 && string.IsNullOrEmpty(value))
+                {
+                    firstFree = i;
+                }
+            }
+
+            if (firstFree < 0)
+            {
+                Debug.LogError("[ProjectSetup] No free layer for '" + name + "'; player stays on Default");
+                return 0;
+            }
+
+            layers.GetArrayElementAtIndex(firstFree).stringValue = name;
+            tagManager.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.SaveAssets();
+            return firstFree;
+        }
+
+        static void SetLayerRecursively(GameObject target, int layer)
+        {
+            target.layer = layer;
+            foreach (Transform child in target.transform)
+            {
+                SetLayerRecursively(child.gameObject, layer);
+            }
+        }
+
+        /// <summary>
+        /// The movement model applies Source friction itself, so the capsule must not also get PhysX
+        /// friction from the ground: that contact impulse cancels horizontal velocity.
+        /// </summary>
+        static PhysicsMaterial EnsurePlayerPhysicsMaterial()
+        {
+            // A .asset extension: Unity 6 warns (and will soon fail) CreateAsset() with a
+            // .physicsMaterial extension.
+            var path = ProjectRoot + "/Art/Materials/PlayerPhysicsMaterial.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            EnsureFolder(Path.GetDirectoryName(path).Replace('\\', '/'));
+            var material = new PhysicsMaterial("PlayerPhysicsMaterial")
+            {
+                dynamicFriction = 0f,
+                staticFriction = 0f,
+                bounciness = 0f,
+                frictionCombine = PhysicsMaterialCombine.Minimum,
+                bounceCombine = PhysicsMaterialCombine.Minimum,
+            };
+            AssetDatabase.CreateAsset(material, path);
+            AssetDatabase.SaveAssets();
+            return material;
+        }
+
+        /// <summary>Run All only creates the profile; it never overwrites tuned values.</summary>
+        static AnimeFpsGame.Movement.MovementProfile EnsureMovementProfile()
+        {
+            var path = ProjectRoot + "/Settings/Movement/DefaultMovementProfile.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<AnimeFpsGame.Movement.MovementProfile>(path);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            EnsureFolder(Path.GetDirectoryName(path).Replace('\\', '/'));
+            var profile = AnimeFpsGame.Movement.MovementProfile.CreateDefault();
+            AssetDatabase.CreateAsset(profile, path);
+            AssetDatabase.SaveAssets();
+            return profile;
         }
 
         static Material EnsureMaterial(string path, Color color)

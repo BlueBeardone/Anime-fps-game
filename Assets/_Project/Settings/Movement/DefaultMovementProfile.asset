@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1baec1d0f8a5d074f88684ab13621e21, type: 3}
+  m_Name: DefaultMovementProfile
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Movement.MovementProfile
+  runSpeed: 6.35
+  sprintSpeed: 8
+  crouchSpeed: 2.15
+  groundAcceleration: 5.5
+  airAcceleration: 12
+  airSpeedCap: 0.76
+  friction: 5.2
+  stopSpeed: 2
+  jumpHeight: 1.45
+  gravity: 20.32
+  terminalVelocity: 50
+  jumpBuffer: 0.1
+  coyoteTime: 0.05
+  autoBhop: 0
+  maxSlopeAngle: 50
+  slideAngle: 51
+  slideAcceleration: 8
+  stepHeight: 0.4
+  groundProbeDistance: 0.15
+  groundSnapDistance: 0.3
+  groundStickSpeed: 2
+  capsuleHeight: 1.8
+  crouchHeight: 1.2
+  eyeHeight: 1.65
+  crouchEyeHeight: 1.05
+  crouchTransition: 0.12
+  sprintForwardDot: 0.7
+  playerMass: 80

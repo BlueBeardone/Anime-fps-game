@@ -1007,7 +1007,7 @@ git -C 'D:\Making Games\Anime fps game' commit -m "feat: centralize gameplay inp
 - Modify: `Assets/_Project/Scripts/Combat/PlayerRespawn.cs`
 - Modify: `Assets/_Project/Scripts/Combat/Health.cs` (remove the now-dead `CharacterController` branch)
 - Modify: `Assets/_Project/Editor/ProjectSetup.cs` (physics body, layer, profile, material, wiring)
-- Create: `Assets/_Project/Art/Materials/PlayerPhysicsMaterial.physicsMaterial` (via generator)
+- Create: `Assets/_Project/Art/Materials/PlayerPhysicsMaterial.asset` (via generator; Unity 6 warns that `CreateAsset()` must not use the `.physicsMaterial` extension)
 - Create: `Assets/_Project/Settings/Movement/DefaultMovementProfile.asset` (via generator)
 - Modify: `Assets/_Project/Tests/PlayMode/MovementTests.cs` (proxy crouch test)
 - Modify: `Assets/_Project/Tests/PlayMode/PlayerSmokeTests.cs` (body assertions)
@@ -1067,14 +1067,14 @@ Expected: PlayerSmokeTests FAIL on the missing Rigidbody/capsule/CharacterMoveme
 
 - In `ProjectSetup.BuildPlayerPrefab`:
   - Ensure a `Player` layer: scan `TagManager.asset` layers 6–31 for the name; if absent, take the first empty slot and write `Player`. Assign that layer recursively to the player root and all children.
-  - Create `EnsurePlayerPhysicsMaterial()` at `Assets/_Project/Art/Materials/PlayerPhysicsMaterial.physicsMaterial`: `dynamicFriction = 0`, `staticFriction = 0`, `bounciness = 0`, both combines `Minimum`.
+  - Create `EnsurePlayerPhysicsMaterial()` at `Assets/_Project/Art/Materials/PlayerPhysicsMaterial.asset` (`.asset`, not `.physicsMaterial`, because Unity 6 warns/future-fails `CreateAsset()` on that extension): `dynamicFriction = 0`, `staticFriction = 0`, `bounciness = 0`, both combines `Minimum`.
   - Create `EnsureMovementProfile()` at `Assets/_Project/Settings/Movement/DefaultMovementProfile.asset` only when missing; use `MovementProfile.CreateDefault()`.
   - Replace `CharacterController` with `Rigidbody` (mass 80, `useGravity = false`, `constraints = FreezeRotation`, `interpolation = Interpolate`, `collisionDetectionMode = ContinuousSpeculative`) and `CapsuleCollider` (height 1.8, radius 0.3, center `(0, 0.9, 0)`, shared material from above).
   - Add `CharacterMovement`, set its `profile` reference. Add `InputReader`. Wire `PlayerMotor` (`movement`, `input`, `playerLook`, `health`, `animator`), `PlayerLook` (`input`, `movement`, `body`, `cameraPivot`), `PlayerWeapons` (`input`), and `PlayerRespawn` (`movement`, `playerLook`).
 - `PlayerMotor`:
   - Keep `NetworkBehaviour`; cache `CharacterMovement`, `InputReader`, `PlayerLook`, `Health`, `Animator`.
   - `readonly NetworkVariable<bool> crouched = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);`
-  - On spawn: non-owner applies `movement.ApplyCrouchDimensions(crouched.Value)` and subscribes to `crouched.OnValueChanged`; owner subscribes to `movement.CrouchChanged` and writes the NetworkVariable. Keep the component enabled on non-owners for this; guard all input/animator work with `IsOwner`.
+  - On spawn: non-owner calls `movement.SetPaused(true)` (the owner-authoritative `NetworkTransform` drives proxies, so letting the core simulate too would fight it), applies `movement.ApplyCrouchDimensions(crouched.Value)` and subscribes to `crouched.OnValueChanged`; owner subscribes to `movement.CrouchChanged` and writes the NetworkVariable. Keep the component enabled on non-owners for this; guard all input/animator work with `IsOwner`.
   - Owner `Update`: when dead, `movement.SetIntent(MovementIntent.None)` and `movement.SetPaused(true)`; otherwise `SetPaused(false)`, build a camera-relative direction from `input.Move` and `playerLook.Yaw` (`Quaternion.Euler(0, yaw, 0) * new Vector3(move.x, 0, move.y)` clamped), and `movement.SetIntent` with sprint/crouch held and `Jump = input.JumpPressed`. Set animator `Status_walk` to 1 when `movement.HorizontalSpeed > 0.1f`, else 0.
   - Unsubscribe from both events in `OnNetworkDespawn`.
   - `PlayerLook`:

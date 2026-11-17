@@ -1,4 +1,5 @@
 using System.Collections;
+using AnimeFpsGame.Movement;
 using AnimeFpsGame.Player;
 using Unity.Netcode;
 using UnityEngine;
@@ -13,7 +14,8 @@ namespace AnimeFpsGame.Combat
     {
         [SerializeField] Health health;
         [SerializeField] PlayerWeapons weapons;
-        [SerializeField] CharacterController controller;
+        [SerializeField] CharacterMovement movement;
+        [SerializeField] PlayerLook playerLook;
         [SerializeField] float respawnSeconds = 3f;
 
         Vector3 spawnPosition;
@@ -32,9 +34,14 @@ namespace AnimeFpsGame.Combat
                 weapons = GetComponent<PlayerWeapons>();
             }
 
-            if (controller == null)
+            if (movement == null)
             {
-                controller = GetComponent<CharacterController>();
+                movement = GetComponent<CharacterMovement>();
+            }
+
+            if (playerLook == null)
+            {
+                playerLook = GetComponent<PlayerLook>();
             }
         }
 
@@ -112,18 +119,19 @@ namespace AnimeFpsGame.Combat
                 return;
             }
 
-            // The CharacterController must be off while teleporting or it fights the new position.
-            var wasEnabled = controller != null && controller.enabled;
-            if (wasEnabled)
+            // Teleporting through the movement core clears intent and velocity together.
+            if (movement != null)
             {
-                controller.enabled = false;
+                movement.Teleport(spawnPosition, spawnRotation);
+            }
+            else
+            {
+                transform.SetPositionAndRotation(spawnPosition, spawnRotation);
             }
 
-            transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-
-            if (wasEnabled)
+            if (playerLook != null)
             {
-                controller.enabled = true;
+                playerLook.SetYaw(spawnRotation.eulerAngles.y);
             }
 
             if (weapons != null)
