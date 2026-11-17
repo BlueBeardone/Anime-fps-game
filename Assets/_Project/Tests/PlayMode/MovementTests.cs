@@ -246,5 +246,89 @@ namespace AnimeFpsGame.Tests
                 rig.Dispose();
             }
         }
+
+        [UnityTest]
+        public IEnumerator StepUpClimbsSmallStep()
+        {
+            var rig = MovementTestRig.Create();
+            var step = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                step.transform.position = MovementTestRig.At(0f, 0.15f, 4f);
+                step.transform.localScale = new Vector3(2f, 0.3f, 6f);
+                Physics.SyncTransforms();
+                rig.SetIntent(Vector3.forward);
+                yield return rig.WaitSteps(40);
+                Assert.Greater(rig.LocalPosition.y, 0.2f, "Must climb the 0.3 m step");
+                Assert.Greater(rig.LocalPosition.z, 1.5f, "Must advance onto the step");
+            }
+            finally
+            {
+                Object.Destroy(step);
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SteepSlopeSlides()
+        {
+            var rig = MovementTestRig.Create();
+            var ramp = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            try
+            {
+                // High above the test floor: the slide must stay on the ramp, not drop onto the floor.
+                ramp.transform.position = MovementTestRig.At(0f, 8f, 0f);
+                ramp.transform.rotation = Quaternion.Euler(-60f, 0f, 0f);
+                ramp.transform.localScale = new Vector3(2f, 1f, 2f);
+                rig.Movement.Teleport(MovementTestRig.At(0f, 8.4f, 0f), Quaternion.identity);
+                Physics.SyncTransforms();
+                yield return rig.WaitSteps(25);
+                Assert.IsFalse(rig.Movement.IsGrounded, "A 60 degree surface is not standable");
+                Assert.IsTrue(rig.Movement.IsSliding);
+                var startedAt = rig.BodyRigidbody.position;
+                yield return rig.WaitSteps(50);
+                Assert.Greater(Vector3.Distance(startedAt, rig.BodyRigidbody.position), 0.3f);
+            }
+            finally
+            {
+                Object.Destroy(ramp);
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AddImpulseMovesGroundedBodyHorizontally()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                yield return rig.WaitSteps(10);
+                rig.Movement.AddImpulse(Vector3.forward * 5f);
+                yield return new WaitForFixedUpdate();
+                Assert.Greater(rig.Movement.HorizontalSpeed, 3f);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator AddImpulseLaunchesGroundedBody()
+        {
+            var rig = MovementTestRig.Create();
+            try
+            {
+                yield return rig.WaitSteps(10);
+                rig.Movement.AddImpulse(Vector3.up * 4f);
+                yield return rig.WaitSteps(2);
+                Assert.Greater(rig.LocalPosition.y, 0.1f);
+                Assert.Greater(rig.Movement.Velocity.y, 1f);
+            }
+            finally
+            {
+                rig.Dispose();
+            }
+        }
     }
 }

@@ -30,7 +30,9 @@ namespace AnimeFpsGame.Movement
         bool grounded;
         bool sprinting;
         bool crouchTarget;
+        bool sliding;
         float crouchT;
+        Vector3 groundNormal = Vector3.up;
         float lastGroundedTime = float.NegativeInfinity;
         float jumpBufferExpiry = float.NegativeInfinity;
 
@@ -48,7 +50,7 @@ namespace AnimeFpsGame.Movement
         public bool IsGrounded => grounded;
         public bool IsCrouching => crouchTarget;
         public bool IsSprinting => sprinting;
-        public bool IsSliding => false;
+        public bool IsSliding => sliding;
         public float HorizontalSpeed => Horizontal(body.linearVelocity).magnitude;
         public Vector3 Velocity => body.linearVelocity;
         public float EyeHeight => profile != null
@@ -108,8 +110,15 @@ namespace AnimeFpsGame.Movement
             Physics.SyncTransforms();
         }
 
+        /// <summary>
+        /// Adds a direct velocity delta in m/s (mass independent), e.g. from an explosion. The next
+        /// tick starts from this velocity, so the shove survives; an upward delta automatically counts
+        /// as airborne until the body starts descending.
+        /// </summary>
         public void AddImpulse(Vector3 deltaVelocity)
         {
+            body.linearVelocity += deltaVelocity;
+            body.WakeUp();
         }
 
         public void SetPaused(bool value)
@@ -170,6 +179,7 @@ namespace AnimeFpsGame.Movement
                 ApplyFriction(ref horizontal, dt);
                 ApplyAcceleration(ref horizontal, wishDirection, WishSpeed,
                     profile.groundAcceleration, dt);
+                TryStepUp();
 
                 // Contacts keep the capsule on the ground; never force downward velocity (that would
                 // fight the solver and make a freshly teleported body report speed).
@@ -183,6 +193,12 @@ namespace AnimeFpsGame.Movement
                     profile.airAcceleration, dt);
                 vertical -= profile.gravity * dt;
                 vertical = Mathf.Max(vertical, -profile.terminalVelocity);
+
+                if (sliding)
+                {
+                    var downhill = Vector3.ProjectOnPlane(Vector3.down, groundNormal).normalized;
+                    horizontal += downhill * (profile.slideAcceleration * dt);
+                }
             }
 
             body.linearVelocity = new Vector3(horizontal.x, vertical, horizontal.z);
@@ -278,9 +294,23 @@ namespace AnimeFpsGame.Movement
                 return;
             }
 
-            if (ProbeGround(out _))
+            sliding = false;
+            if (ProbeGround(out var hit))
             {
-                lastGroundedTime = Time.time;
+                groundNormal = hit.normal;
+                var angle = Vector3.Angle(hit.normal, Vector3.up);
+                if (angle > profile.slideAngle)
+                {
+                    // Too steep to stand on: slide, never count as grounded.
+                    sliding = true;
+                    grounded = false;
+                    return;
+                }
+
+                if (angle <= profile.maxSlopeAngle)
+                {
+                    lastGroundedTime = Time.time;
+                }
             }
 
             grounded = Time.time - lastGroundedTime <= GroundedGrace;
@@ -288,16 +318,14 @@ namespace AnimeFpsGame.Movement
 
         bool ProbeGround(out RaycastHit hit)
         {
-            var radius = capsule.radius * 0.95f;
-            var origin = body.position + Vector3.up * capsule.radius;
-            var distance = capsule.radius + profile.groundProbeDistance;
-            if (!Physics.SphereCast(origin, radius, Vector3.down, out hit, distance, groundMask,
-                    QueryTriggerInteraction.Ignore))
-            {
-                return false;
-            }
-
-            return Vector3.Angle(hit.normal, Vector3.up) <= profile.maxSlopeAngle;
+            // Cast the actual capsule shape a short distance down. On a slope the capsule sits with
+            // its lowest point well above the surface, so a ray or a small sphere from the feet can
+            // start inside the geometry and report nothing; the capsule shape cannot.
+            var radius = capsule.radius * 0.98f;
+            var bottom = body.position + Vector3.up * radius;
+            var top = body.position + Vector3.up * (capsule.height - radius);
+            return Physics.CapsuleCast(bottom, top, radius, Vector3.down, out hit,
+                profile.groundProbeDistance, groundMask, QueryTriggerInteraction.Ignore);
         }
 
         void ApplyFriction(ref Vector3 horizontal, float dt)
@@ -332,6 +360,50 @@ namespace AnimeFpsGame.Movement
 
             var accelSpeed = Mathf.Min(acceleration * wishSpeed * dt, addSpeed);
             horizontal += direction * accelSpeed;
+        }
+
+        void TryStepUp()
+        {
+            if (wishDirection.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            var radius = capsule.radius;
+            var probeRadius = radius * 0.5f;
+            var lowOrigin = body.position + Vector3.up * 0.05f;
+            var highOrigin = body.position + Vector3.up * 0.2f;
+            if (!Physics.CapsuleCast(lowOrigin, highOrigin, probeRadius, wishDirection,
+                    out _, radius + 0.15f, groundMask, QueryTriggerInteraction.Ignore))
+            {
+                return;
+            }
+
+            var rayOrigin = body.position + Vector3.up * profile.stepHeight
+                + wishDirection * (radius + 0.2f);
+            if (!Physics.Raycast(rayOrigin, Vector3.down, out var stepHit,
+                    profile.stepHeight + 0.1f, groundMask, QueryTriggerInteraction.Ignore))
+            {
+                return;
+            }
+
+            var rise = stepHit.point.y - body.position.y;
+            if (rise <= 0.02f || rise > profile.stepHeight)
+            {
+                return;
+            }
+
+            var raised = body.position + Vector3.up * (rise + 0.02f);
+            var checkRadius = radius * 0.95f;
+            var bottom = raised + Vector3.up * (checkRadius + 0.02f);
+            var top = raised + Vector3.up * (profile.capsuleHeight - checkRadius - 0.02f);
+            if (Physics.CheckCapsule(bottom, top, checkRadius, groundMask, QueryTriggerInteraction.Ignore))
+            {
+                return;
+            }
+
+            body.position = raised;
+            Physics.SyncTransforms();
         }
 
         void UpdateState(Vector3 horizontal)
