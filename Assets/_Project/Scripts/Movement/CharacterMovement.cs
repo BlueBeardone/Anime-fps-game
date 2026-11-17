@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace AnimeFpsGame.Movement
@@ -22,9 +23,13 @@ namespace AnimeFpsGame.Movement
         int groundMask;
 
         Vector3 wishDirection;
+        bool sprintHeld;
+        bool jumpHeld;
         bool paused;
         bool grounded;
+        bool sprinting;
         float lastGroundedTime = float.NegativeInfinity;
+        float jumpBufferExpiry = float.NegativeInfinity;
 
         public MovementProfile Profile
         {
@@ -39,11 +44,13 @@ namespace AnimeFpsGame.Movement
         public MovementState State { get; private set; }
         public bool IsGrounded => grounded;
         public bool IsCrouching => false;
-        public bool IsSprinting => false;
+        public bool IsSprinting => sprinting;
         public bool IsSliding => false;
         public float HorizontalSpeed => Horizontal(body.linearVelocity).magnitude;
         public Vector3 Velocity => body.linearVelocity;
         public float EyeHeight => profile != null ? profile.eyeHeight : 1.65f;
+
+        public event Action Jumped;
 
         void Awake()
         {
@@ -71,6 +78,15 @@ namespace AnimeFpsGame.Movement
             var direction = intent.WishDirection;
             direction.y = 0f;
             wishDirection = Vector3.ClampMagnitude(direction, 1f);
+            sprintHeld = intent.Sprint;
+
+            // A jump is only queued on the rising edge, so holding the button never auto-bhops.
+            if (intent.Jump && !jumpHeld)
+            {
+                jumpBufferExpiry = Time.time + profile.jumpBuffer;
+            }
+
+            jumpHeld = intent.Jump;
         }
 
         public void Teleport(Vector3 position, Quaternion rotation)
@@ -108,6 +124,9 @@ namespace AnimeFpsGame.Movement
         void ClearIntent()
         {
             wishDirection = Vector3.zero;
+            sprintHeld = false;
+            jumpHeld = false;
+            jumpBufferExpiry = float.NegativeInfinity;
         }
 
         void FixedUpdate()
@@ -124,15 +143,24 @@ namespace AnimeFpsGame.Movement
             var horizontal = Horizontal(velocity);
             var vertical = velocity.y;
 
-            if (grounded)
+            if (TryJump())
             {
+                vertical = Mathf.Sqrt(2f * profile.gravity * profile.jumpHeight);
+            }
+            else if (grounded)
+            {
+                UpdateSprint();
                 ApplyFriction(ref horizontal, dt);
-                ApplyAcceleration(ref horizontal, wishDirection, profile.runSpeed,
+                ApplyAcceleration(ref horizontal, wishDirection, WishSpeed,
                     profile.groundAcceleration, dt);
                 vertical = -profile.groundStickSpeed;
             }
             else
             {
+                sprinting = false;
+                var wishSpeed = Mathf.Min(WishSpeed, profile.airSpeedCap);
+                ApplyAcceleration(ref horizontal, wishDirection, wishSpeed,
+                    profile.airAcceleration, dt);
                 vertical -= profile.gravity * dt;
                 vertical = Mathf.Max(vertical, -profile.terminalVelocity);
             }
@@ -141,8 +169,44 @@ namespace AnimeFpsGame.Movement
             UpdateState(horizontal);
         }
 
+        float WishSpeed => sprinting ? profile.sprintSpeed : profile.runSpeed;
+
+        void UpdateSprint()
+        {
+            sprinting = sprintHeld
+                && wishDirection.sqrMagnitude > 0.0001f
+                && Vector3.Dot(transform.forward, wishDirection) >= profile.sprintForwardDot;
+        }
+
+        bool TryJump()
+        {
+            if (jumpBufferExpiry < 0f || Time.time > jumpBufferExpiry)
+            {
+                return false;
+            }
+
+            if (!grounded && Time.time - lastGroundedTime > profile.coyoteTime)
+            {
+                return false;
+            }
+
+            jumpBufferExpiry = float.NegativeInfinity;
+            grounded = false;
+            lastGroundedTime = float.NegativeInfinity;
+            Jumped?.Invoke();
+            return true;
+        }
+
         void UpdateGrounded()
         {
+            // Rising means airborne even while the probe still grazes the ground: otherwise the
+            // ground-stick velocity would cancel this or any other upward impulse.
+            if (body.linearVelocity.y > 0.1f)
+            {
+                grounded = false;
+                return;
+            }
+
             if (ProbeGround(out _))
             {
                 lastGroundedTime = Time.time;
@@ -205,6 +269,11 @@ namespace AnimeFpsGame.Movement
             if (grounded)
             {
                 state |= MovementState.Grounded;
+            }
+
+            if (sprinting)
+            {
+                state |= MovementState.Sprinting;
             }
 
             if (horizontal.magnitude > MovingSpeedThreshold)
