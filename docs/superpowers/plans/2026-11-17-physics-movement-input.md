@@ -704,6 +704,7 @@ using NUnit.Framework;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.TestTools;
 
 namespace AnimeFpsGame.Tests
@@ -747,7 +748,9 @@ namespace AnimeFpsGame.Tests
             Assert.Contains("Move#0", result.ClearedBindings);
             Assert.AreEqual(string.Empty, asset.FindAction("Move").bindings[0].effectivePath);
 
-            var fresh = ScriptableObject.CreateInstance<InputActionAsset>();
+            // Overrides are keyed by binding id, so a reload scenario must clone the asset (which
+            // keeps the ids) rather than build a new one (whose ids are random).
+            var fresh = CloneAsset();
             fresh.LoadBindingOverridesFromJson(PlayerInputBindings.ExportOverrides(asset));
             Assert.AreEqual(string.Empty, fresh.FindAction("Move").bindings[0].effectivePath);
             Assert.AreEqual("<Keyboard>/w", fresh.FindAction("Reload").bindings[0].effectivePath);
@@ -788,13 +791,17 @@ namespace AnimeFpsGame.Tests
             PlayerInputBindings.ApplyBindingOverride(asset, "Reload", 0, "<Keyboard>/t");
             PlayerInputBindings.Save(asset);
 
-            var fresh = ScriptableObject.CreateInstance<InputActionAsset>();
-            var freshMap = fresh.AddActionMap("Player");
-            freshMap.AddAction("Move", InputActionType.Value, "<Keyboard>/w");
-            freshMap.AddAction("Reload", InputActionType.Button, "<Keyboard>/r");
+            var fresh = CloneAsset();
             PlayerInputBindings.EnsureLoaded(fresh);
             Assert.AreEqual("<Keyboard>/t", fresh.FindAction("Reload").bindings[0].effectivePath);
             Object.DestroyImmediate(fresh);
+        }
+
+        InputActionAsset CloneAsset()
+        {
+            var clone = Object.Instantiate(asset);
+            clone.RemoveAllBindingOverrides();
+            return clone;
         }
 
         [UnityTest]
@@ -835,11 +842,11 @@ Expected: FAIL, `PlayerInputBindings` missing.
 
 - [ ] **Step 3: Implement the rebinding facade and persistence**
 
-- `ApplyBindingOverride`: reject unknown action, out-of-range binding, empty path, or `<Keyboard>/escape` with `Failed`. Apply with `action.ApplyBindingOverride(index, controlPath)`. Then scan every binding of every action in the `Player` map by `effectivePath`; skip empty paths and the new binding. For every other match, call `otherAction.ApplyBindingOverride(otherIndex, string.Empty)` and record `"ActionName#otherIndex"`. Return `ConflictResolved` when anything was cleared, else `Success`.
+- `ApplyBindingOverride`: reject unknown action, out-of-range binding, empty path, or `<Keyboard>/escape` with `Failed`. Apply with `action.ApplyBindingOverride(index, controlPath)`. Then scan every binding of every action in the `Player` map by `effectivePath`; skip empty paths and the new binding. For every other match, call `otherAction.ApplyBindingOverride(otherIndex, string.Empty)` and record `"ActionName#otherIndex"`. Return `ConflictResolved` when anything was cleared, else `Success`. An empty `overridePath` is not null, so `InputBinding.hasOverrides` is true and `SaveBindingOverridesAsJson` does persist the explicit unbind (`hasOverrides` is what the serializer checks).
 - `Save`: `PlayerPrefs.SetString(PrefsKey, ExportOverrides(asset)); PlayerPrefs.Save();`.
 - `EnsureLoaded`: if the key exists, disable the asset if enabled, call `LoadBindingOverridesFromJson`, re-enable, and leave the maps in their previous enabled state.
 - `ResetBinding`: `FindAction(...).RemoveBindingOverride(bindingIndex)`, then `Save`. `ResetAllBindings`: `RemoveAllBindingOverrides`, delete the key, save PlayerPrefs.
-- `BeginRebind`: return false when an operation is already running or the action/index is invalid. Disable the `Player` map, start `action.PerformInteractiveRebinding(bindingIndex)` with `WithCancelingThrough("<Keyboard>/escape")`, exclude `<Mouse>/position` and `<Mouse>/delta`, `OnMatchWaitForAnother(0.1f)`. On complete, use `operation.selectedControl.path` with `ApplyBindingOverride`, save, dispose, re-enable the map and invoke the callback. On cancel, restore the map and return `Canceled`.
+- `BeginRebind`: return false when an operation is already running or the action/index is invalid. Disable the `Player` map, start `action.PerformInteractiveRebinding(bindingIndex)` with `WithCancelingThrough("<Keyboard>/escape")`, exclude `<Mouse>/position` and `<Mouse>/delta`, `OnMatchWaitForAnother(0.1f)`. On complete, canonicalize `operation.selectedControl.path` (replace the device instance segment with `<device.layout>`, so `/Keyboard/t` or `/RebindTestKeyboard/t` becomes `<Keyboard>/t`) and pass it to `ApplyBindingOverride`, save, dispose, re-enable the map and invoke the callback. On cancel, restore the map and return `Canceled`.
 - `CancelRebind` calls `Cancel()` on the active operation.
 - `ExportOverrides` returns `asset.SaveBindingOverridesAsJson()`; `ImportOverrides` calls `LoadBindingOverridesFromJson`.
 
