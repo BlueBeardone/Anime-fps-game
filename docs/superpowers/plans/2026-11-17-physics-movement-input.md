@@ -101,27 +101,46 @@ namespace AnimeFpsGame.Tests
 {
     public class MovementTestRig : System.IDisposable
     {
+        /// <summary>Far from the origin so colliders left by other fixtures cannot block the body.</summary>
+        public static readonly Vector3 ArenaOrigin = new Vector3(2000f, 0f, 2000f);
+
         public GameObject Floor;
         public GameObject Body;
         public Rigidbody BodyRigidbody;
         public CapsuleCollider Capsule;
         public CharacterMovement Movement;
+        public PhysicsMaterial BodyMaterial;
+
+        public Vector3 LocalPosition => Body.transform.position - ArenaOrigin;
+
+        public static Vector3 At(float x, float y, float z) => ArenaOrigin + new Vector3(x, y, z);
 
         public static MovementTestRig Create(MovementProfile profile = null)
         {
             var rig = new MovementTestRig();
             rig.Floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             rig.Floor.name = "TestFloor";
-            rig.Floor.transform.position = new Vector3(0f, -0.5f, 0f);
+            rig.Floor.transform.position = At(0f, -0.5f, 0f);
             rig.Floor.transform.localScale = new Vector3(40f, 1f, 40f);
 
             rig.Body = new GameObject("TestBody");
             rig.Body.layer = 6;
-            rig.Body.transform.position = new Vector3(0f, 0.02f, 0f);
+            rig.Body.transform.position = At(0f, 0.02f, 0f);
             rig.Capsule = rig.Body.AddComponent<CapsuleCollider>();
             rig.Capsule.height = 1.8f;
             rig.Capsule.radius = 0.3f;
             rig.Capsule.center = new Vector3(0f, 0.9f, 0f);
+            // The model applies Source friction itself; PhysX friction would cancel horizontal
+            // velocity through the ground-stick contact impulse.
+            rig.BodyMaterial = new PhysicsMaterial("TestBodyMaterial")
+            {
+                dynamicFriction = 0f,
+                staticFriction = 0f,
+                bounciness = 0f,
+                frictionCombine = PhysicsMaterialCombine.Minimum,
+                bounceCombine = PhysicsMaterialCombine.Minimum,
+            };
+            rig.Capsule.sharedMaterial = rig.BodyMaterial;
             rig.BodyRigidbody = rig.Body.AddComponent<Rigidbody>();
             rig.BodyRigidbody.mass = 80f;
             rig.BodyRigidbody.useGravity = false;
@@ -153,6 +172,7 @@ namespace AnimeFpsGame.Tests
         {
             Object.Destroy(Body);
             Object.Destroy(Floor);
+            Object.Destroy(BodyMaterial);
         }
     }
 }
@@ -195,7 +215,7 @@ namespace AnimeFpsGame.Tests
                 yield return rig.WaitSteps(120);
                 Assert.IsTrue(rig.Movement.IsGrounded, "Body must be grounded");
                 Assert.AreEqual(rig.Movement.Profile.runSpeed, rig.Movement.HorizontalSpeed, 0.25f);
-                Assert.Greater(rig.Body.transform.position.z, 4f);
+                Assert.Greater(rig.LocalPosition.z, 4f);
             }
             finally
             {
@@ -439,7 +459,7 @@ public IEnumerator CrouchBlockedUnderLowCeiling()
     try
     {
         rig.Movement.ApplyCrouchDimensions(true);
-        ceiling.transform.position = new Vector3(0f, 2.25f, 0f);
+        ceiling.transform.position = MovementTestRig.At(0f, 2.25f, 0f);
         ceiling.transform.localScale = new Vector3(4f, 1.5f, 4f);
         Physics.SyncTransforms();
         yield return rig.WaitSteps(5);
@@ -464,10 +484,10 @@ public IEnumerator TeleportClearsVelocity()
         rig.SetIntent(Vector3.forward);
         yield return rig.WaitSteps(40);
         Assert.Greater(rig.Movement.HorizontalSpeed, 3f);
-        rig.Movement.Teleport(new Vector3(5f, 0.02f, 5f), Quaternion.identity);
+        rig.Movement.Teleport(MovementTestRig.At(5f, 0.02f, 5f), Quaternion.identity);
         yield return new WaitForFixedUpdate();
         Assert.Less(rig.Movement.Velocity.magnitude, 0.1f);
-        Assert.AreEqual(5f, rig.BodyRigidbody.position.x, 0.05f);
+        Assert.AreEqual(5f, rig.LocalPosition.x, 0.05f);
     }
     finally
     {
@@ -551,13 +571,13 @@ public IEnumerator StepUpClimbsSmallStep()
     var step = GameObject.CreatePrimitive(PrimitiveType.Cube);
     try
     {
-        step.transform.position = new Vector3(0f, 0.15f, 4f);
+        step.transform.position = MovementTestRig.At(0f, 0.15f, 4f);
         step.transform.localScale = new Vector3(2f, 0.3f, 6f);
         Physics.SyncTransforms();
         rig.SetIntent(Vector3.forward);
         yield return rig.WaitSteps(40);
-        Assert.Greater(rig.BodyRigidbody.position.y, 0.2f, "Must climb the 0.3 m step");
-        Assert.Greater(rig.BodyRigidbody.position.z, 1.5f, "Must advance onto the step");
+        Assert.Greater(rig.LocalPosition.y, 0.2f, "Must climb the 0.3 m step");
+        Assert.Greater(rig.LocalPosition.z, 1.5f, "Must advance onto the step");
     }
     finally
     {
@@ -573,10 +593,10 @@ public IEnumerator SteepSlopeSlides()
     var ramp = GameObject.CreatePrimitive(PrimitiveType.Plane);
     try
     {
-        ramp.transform.position = new Vector3(0f, 0f, 0f);
+        ramp.transform.position = MovementTestRig.ArenaOrigin;
         ramp.transform.rotation = Quaternion.Euler(-60f, 0f, 0f);
         ramp.transform.localScale = new Vector3(2f, 1f, 2f);
-        rig.Movement.Teleport(new Vector3(0f, 1f, 0f), Quaternion.identity);
+        rig.Movement.Teleport(MovementTestRig.At(0f, 1f, 0f), Quaternion.identity);
         Physics.SyncTransforms();
         yield return rig.WaitSteps(25);
         Assert.IsFalse(rig.Movement.IsGrounded, "A 60 degree surface is not standable");
@@ -618,7 +638,7 @@ public IEnumerator AddImpulseLaunchesGroundedBody()
         yield return rig.WaitSteps(10);
         rig.Movement.AddImpulse(Vector3.up * 4f);
         yield return rig.WaitSteps(2);
-        Assert.Greater(rig.BodyRigidbody.position.y, 0.1f);
+        Assert.Greater(rig.LocalPosition.y, 0.1f);
         Assert.Greater(rig.Movement.Velocity.y, 1f);
     }
     finally
