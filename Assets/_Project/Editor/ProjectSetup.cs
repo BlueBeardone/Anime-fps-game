@@ -298,6 +298,8 @@ namespace AnimeFpsGame.EditorTools
             inputSerialized.FindProperty("m_DefaultActionMap").stringValue = "Player";
             inputSerialized.ApplyModifiedPropertiesWithoutUndo();
 
+            var inputReader = root.AddComponent<AnimeFpsGame.Input.InputReader>();
+
             var pivot = new GameObject("CameraPivot");
             pivot.transform.SetParent(root.transform, false);
             pivot.transform.localPosition = new Vector3(0f, 1.65f, 0f);
@@ -335,6 +337,7 @@ namespace AnimeFpsGame.EditorTools
 
             var look = root.AddComponent<AnimeFpsGame.Player.PlayerLook>();
             SetReference(look, "cameraPivot", pivot.transform);
+            SetReference(look, "input", inputReader);
 
             var weapons = root.AddComponent<AnimeFpsGame.Player.PlayerWeapons>();
             var health = root.AddComponent<Health>();
@@ -346,6 +349,7 @@ namespace AnimeFpsGame.EditorTools
             SetReference(weapons, "viewCamera", cameraComponent);
             SetReference(weapons, "health", health);
             SetReference(weapons, "effects", effects);
+            SetReference(weapons, "input", inputReader);
 
             var respawn = root.AddComponent<PlayerRespawn>();
             SetReference(respawn, "health", health);

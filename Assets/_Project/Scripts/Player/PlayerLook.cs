@@ -1,7 +1,7 @@
 using System.Collections.Generic;
+using AnimeFpsGame.Input;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace AnimeFpsGame.Player
 {
@@ -11,6 +11,7 @@ namespace AnimeFpsGame.Player
     public class PlayerLook : NetworkBehaviour
     {
         [SerializeField] Transform cameraPivot;
+        [SerializeField] InputReader input;
         [SerializeField] float sensitivity = 2f;
         [SerializeField] float minPitch = -85f;
         [SerializeField] float maxPitch = 85f;
@@ -19,7 +20,6 @@ namespace AnimeFpsGame.Player
 
         const float MouseScale = 0.1f;
 
-        InputAction lookAction;
         Camera playerCamera;
         AnimeFpsGame.Combat.Health health;
         float pitch;
@@ -34,6 +34,7 @@ namespace AnimeFpsGame.Player
         void Awake()
         {
             health = GetComponent<AnimeFpsGame.Combat.Health>();
+            input ??= GetComponent<InputReader>();
         }
 
         public override void OnNetworkSpawn()
@@ -68,12 +69,6 @@ namespace AnimeFpsGame.Player
                     listener.enabled = false;
                     disabledListeners.Add(listener);
                 }
-            }
-
-            var input = GetComponent<PlayerInput>();
-            if (input != null && input.actions != null)
-            {
-                lookAction = input.actions["Look"];
             }
 
             yaw = transform.eulerAngles.y;
@@ -120,7 +115,7 @@ namespace AnimeFpsGame.Player
 
         void Update()
         {
-            if (lookAction == null)
+            if (input == null)
             {
                 return;
             }
@@ -130,7 +125,7 @@ namespace AnimeFpsGame.Player
                 return;
             }
 
-            var look = lookAction.ReadValue<Vector2>() * (sensitivity * MouseScale);
+            var look = input.Look * (sensitivity * MouseScale);
             yaw += look.x;
             pitch = Mathf.Clamp(pitch - look.y, minPitch, maxPitch);
 

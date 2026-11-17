@@ -71,6 +71,7 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(motor, "Spawned player has PlayerMotor");
             Assert.IsNotNull(weapons.GetComponent<Player.PlayerLook>(), "Spawned player has PlayerLook");
             Assert.IsNotNull(weapons.GetComponent<UnityEngine.InputSystem.PlayerInput>(), "Spawned player has PlayerInput");
+            Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Input.InputReader>(), "Spawned player has InputReader");
 
             weapons.SetSlot(1);
             yield return null;

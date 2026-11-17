@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using AnimeFpsGame.Combat;
 using AnimeFpsGame.Effects;
+using AnimeFpsGame.Input;
 using AnimeFpsGame.Weapons;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace AnimeFpsGame.Player
 {
@@ -28,6 +28,7 @@ namespace AnimeFpsGame.Player
         [SerializeField] Camera viewCamera;
         [SerializeField] Health health;
         [SerializeField] ShotEffects effects;
+        [SerializeField] InputReader input;
 
         readonly NetworkVariable<byte> activeSlot = new(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -35,10 +36,6 @@ namespace AnimeFpsGame.Player
         IGun[] guns;
         IGun boundGun;
         PlayerLook playerLook;
-        InputAction attackAction;
-        InputAction reloadAction;
-        InputAction nextAction;
-        InputAction previousAction;
         GameObject currentViewmodel;
         Vector3 viewmodelBasePosition;
         Vector3 viewmodelBaseEuler;
@@ -61,6 +58,7 @@ namespace AnimeFpsGame.Player
         void Awake()
         {
             playerLook = GetComponent<PlayerLook>();
+            input ??= GetComponent<InputReader>();
             BuildGuns();
         }
 
@@ -80,15 +78,6 @@ namespace AnimeFpsGame.Player
             if (!IsOwner)
             {
                 return;
-            }
-
-            var input = GetComponent<PlayerInput>();
-            if (input != null && input.actions != null)
-            {
-                attackAction = input.actions["Attack"];
-                reloadAction = input.actions["Reload"];
-                nextAction = input.actions["Next"];
-                previousAction = input.actions["Previous"];
             }
 
             BindActiveGun();
@@ -128,15 +117,15 @@ namespace AnimeFpsGame.Player
                 return;
             }
 
-            if (reloadAction != null && reloadAction.WasPressedThisFrame())
+            if (input != null && input.ReloadPressed)
             {
                 gun.TryStartReload();
             }
 
-            if (attackAction != null)
+            if (input != null)
             {
-                var pressed = attackAction.WasPressedThisFrame();
-                var held = attackAction.IsPressed();
+                var pressed = input.AttackPressed;
+                var held = input.AttackHeld;
                 if (pressed || held)
                 {
                     TryFireActive(gun, pressed, held);
@@ -207,18 +196,24 @@ namespace AnimeFpsGame.Player
 
         void HandleSlotInput()
         {
-            if (nextAction != null && nextAction.WasPressedThisFrame())
+            if (input == null)
+            {
+                return;
+            }
+
+            if (input.CycleNextPressed)
             {
                 SetSlot((byte)((activeSlot.Value + 1) % slots.Length));
             }
 
-            if (previousAction != null && previousAction.WasPressedThisFrame())
+            if (input.CyclePreviousPressed)
             {
                 SetSlot((byte)((activeSlot.Value + slots.Length - 1) % slots.Length));
             }
 
-            // Mouse wheel is not bound to Next/Previous in the shared input actions, so read it here.
-            var scroll = Mouse.current != null ? Mouse.current.scroll.ReadValue().y : 0f;
+            // Mouse wheel is not bound to Next/Previous in the shared input actions, so InputReader
+            // exposes the raw scroll axis.
+            var scroll = input.ScrollY;
             if (Mathf.Abs(scroll) > 0.01f && Time.unscaledTime - lastScrollTime > 0.2f)
             {
                 lastScrollTime = Time.unscaledTime;
