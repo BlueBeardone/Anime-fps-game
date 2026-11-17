@@ -69,7 +69,8 @@ namespace AnimeFpsGame.Tests
 
             var motor = weapons.GetComponent<Player.PlayerMotor>();
             Assert.IsNotNull(motor, "Spawned player has PlayerMotor");
-            Assert.IsNotNull(weapons.GetComponent<Player.PlayerLook>(), "Spawned player has PlayerLook");
+            var look = weapons.GetComponent<Player.PlayerLook>();
+            Assert.IsNotNull(look, "Spawned player has PlayerLook");
             Assert.IsNotNull(weapons.GetComponent<UnityEngine.InputSystem.PlayerInput>(), "Spawned player has PlayerInput");
             Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Input.InputReader>(), "Spawned player has InputReader");
             var body = weapons.GetComponent<Rigidbody>();
@@ -78,6 +79,14 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>(), "Player uses CharacterMovement");
             Assert.IsNull(weapons.GetComponent<CharacterController>(), "CharacterController must be gone");
             Assert.IsFalse(body.isKinematic, "The owner simulates the body");
+
+            // FreezeRotation must not stop the look code from turning the body: MoveRotation poses
+            // the body during the next physics step, and the crossed angles here would catch a body
+            // that silently refuses to rotate.
+            look.SetYaw(90f);
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+            Assert.AreEqual(90f, body.rotation.eulerAngles.y, 1f, "Body yaw follows the look direction");
 
             weapons.SetSlot(1);
             yield return null;
