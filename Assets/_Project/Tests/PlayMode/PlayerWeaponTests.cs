@@ -90,5 +90,69 @@ namespace AnimeFpsGame.Tests
             Assert.AreSame(gun, weapons.ActiveGun, "Slot 0 keeps its gun instance");
             Assert.AreEqual(afterShot, weapons.ActiveGun.AmmoInMagazine);
         }
+
+        [UnityTest]
+        public IEnumerator RifleViewmodelIsVisibleInFrontOfCamera()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons, "Player must spawn");
+            Assert.IsNotNull(weapons.CurrentViewmodel, "The owner must hold a viewmodel");
+            Assert.IsTrue(weapons.CurrentViewmodel.activeInHierarchy);
+
+            var renderers = weapons.CurrentViewmodel.GetComponentsInChildren<Renderer>();
+            Assert.IsNotEmpty(renderers, "The viewmodel must have visible geometry");
+
+            var bounds = renderers[0].bounds;
+            for (var i = 1; i < renderers.Length; i++)
+            {
+                bounds.Encapsulate(renderers[i].bounds);
+            }
+
+            var planes = GeometryUtility.CalculateFrustumPlanes(weapons.ViewCamera);
+            Assert.IsTrue(GeometryUtility.TestPlanesAABB(planes, bounds),
+                "The rifle must be inside the camera frustum");
+
+            var angle = Vector3.Angle(
+                weapons.CurrentViewmodel.transform.forward,
+                weapons.ViewCamera.transform.forward);
+            Assert.Less(angle, 15f, "The barrel must point where the camera looks");
+        }
+
+        [UnityTest]
+        public IEnumerator MuzzleIsInFrontOfTheCamera()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons);
+
+            var camera = weapons.ViewCamera.transform;
+            var toMuzzle = weapons.MuzzleWorldPosition - camera.position;
+
+            Assert.Greater(Vector3.Dot(toMuzzle, camera.forward), 0f,
+                "The muzzle must be in front of the camera");
+            Assert.Less(toMuzzle.magnitude, 3f,
+                "The muzzle must be on the held gun, not across the map");
+        }
     }
 }

@@ -39,25 +39,26 @@ namespace AnimeFpsGame.Effects
         }
 
         /// <summary>Owner-side feedback from the actual raycast hits.</summary>
-        public void PlayLocal(Vector3 origin, Vector3[] directions, RaycastHit[] hits)
+        public void PlayLocal(Vector3 muzzleOrigin, Vector3 rayOrigin, Vector3[] directions,
+            RaycastHit[] hits)
         {
             if (directions == null)
             {
                 return;
             }
 
-            PlayFlash(origin);
+            PlayFlash(muzzleOrigin);
 
             for (var i = 0; i < directions.Length; i++)
             {
-                var end = origin + directions[i] * tracerMissDistance;
+                var end = rayOrigin + directions[i] * tracerMissDistance;
                 var hasHit = hits != null && i < hits.Length && hits[i].collider != null;
                 if (hasHit)
                 {
                     end = hits[i].point;
                 }
 
-                PlayTracer(origin, end);
+                PlayTracer(muzzleOrigin, end);
 
                 if (hasHit)
                 {
@@ -206,7 +207,7 @@ namespace AnimeFpsGame.Effects
                 return;
             }
 
-            muzzleLight.transform.position = origin + transform.forward * 0.3f;
+            muzzleLight.transform.position = origin;
             muzzleLight.enabled = true;
             muzzleExpiry = Time.time + FlashSeconds;
         }

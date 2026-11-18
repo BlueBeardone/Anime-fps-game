@@ -39,6 +39,7 @@ namespace AnimeFpsGame.Player
         GameObject currentViewmodel;
         Vector3 viewmodelBasePosition;
         Vector3 viewmodelBaseEuler;
+        Vector3 muzzleLocal;
         float viewmodelKickBack;
         float viewmodelKickUp;
         float lastScrollTime;
@@ -51,6 +52,12 @@ namespace AnimeFpsGame.Player
         public int SlotCount => slots?.Length ?? 0;
         public GameObject CurrentViewmodel => currentViewmodel;
         public bool IsDead => health != null && health.IsDead;
+
+        public Vector3 MuzzleWorldPosition => currentViewmodel != null
+            ? currentViewmodel.transform.TransformPoint(muzzleLocal)
+            : viewCamera != null
+                ? viewCamera.transform.position + viewCamera.transform.forward * 0.5f
+                : transform.position + transform.forward * 0.5f;
 
         public IGun ActiveGun =>
             guns != null && CurrentSlot >= 0 && CurrentSlot < guns.Length ? guns[CurrentSlot] : null;
@@ -245,7 +252,7 @@ namespace AnimeFpsGame.Player
 
             if (effects != null)
             {
-                effects.PlayLocal(shot.Origin, shot.Directions, hits);
+                effects.PlayLocal(MuzzleWorldPosition, shot.Origin, shot.Directions, hits);
             }
 
             if (IsSpawned)
@@ -470,14 +477,17 @@ namespace AnimeFpsGame.Player
             var reload01 = gun != null && gun.IsReloading
                 ? Mathf.Sin(gun.ReloadProgress01 * Mathf.PI)
                 : 0f;
+            var bolt01 = gun != null && gun.BoltCycleProgress01 > 0f
+                ? Mathf.Sin(gun.BoltCycleProgress01 * Mathf.PI)
+                : 0f;
 
             currentViewmodel.transform.localPosition = viewmodelBasePosition + new Vector3(
                 0f,
-                -0.06f * reload01,
+                -0.06f * reload01 - 0.02f * bolt01,
                 -viewmodelKickBack - 0.03f * reload01);
 
             currentViewmodel.transform.localRotation = Quaternion.Euler(
-                viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01, 0f, 0f));
+                viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01 - 8f * bolt01, 0f, 0f));
         }
 
         void OnSlotChanged(byte previous, byte current)
@@ -512,6 +522,7 @@ namespace AnimeFpsGame.Player
                 currentViewmodel.transform.localPosition = viewmodelBasePosition;
                 currentViewmodel.transform.localRotation = Quaternion.Euler(viewmodelBaseEuler);
                 currentViewmodel.transform.localScale = Vector3.one * definition.viewmodelScale;
+                muzzleLocal = ViewmodelMuzzle.ComputeLocal(currentViewmodel);
                 // Switching slots while dead must not bring the gun back on screen.
                 currentViewmodel.SetActive(!IsDead);
             }

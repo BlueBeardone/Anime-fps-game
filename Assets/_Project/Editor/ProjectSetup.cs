@@ -380,7 +380,7 @@ namespace AnimeFpsGame.EditorTools
             var slots = weaponsSerialized.FindProperty("slots");
             slots.arraySize = 4;
             ConfigureSlot(slots.GetArrayElementAtIndex(0), "Rifle", "status_k98", "K98", k98Viewmodel,
-                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.08f, rifleStats);
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.08f, rifleStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(1), "Handgun", "Status_LugerP08", "Luger_P08", lugerViewmodel,
                 new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 90f, 0f), 0.08f, handgunStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(2), "SMG", "status_MP40", "MP40", mp40Viewmodel,

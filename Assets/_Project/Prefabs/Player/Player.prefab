@@ -434,7 +434,7 @@ MonoBehaviour:
     soldierMeshName: K98
     viewmodelPrefab: {fileID: 1733870605739572, guid: 4e0e2c76fc3c857429fa82f9df4cf4f6, type: 3}
     viewmodelLocalPosition: {x: 0.24, y: -0.22, z: 0.48}
-    viewmodelLocalEuler: {x: 0, y: 90, z: 0}
+    viewmodelLocalEuler: {x: 0, y: 0, z: 0}
     viewmodelScale: 0.08
     stats: {fileID: 11400000, guid: b4f95c9b17ceb7f46b40e928f0889b02, type: 2}
   - displayName: Handgun
