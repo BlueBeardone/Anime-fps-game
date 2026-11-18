@@ -21,6 +21,11 @@ namespace AnimeFpsGame.Player
             "PanzerSchreck", "Panzerfaust_launcher", "Flammenwerfer"
         };
 
+        // Meshes whose geometry contains the owner's eye point: hiding them keeps the camera out of
+        // the soldier's own head. Wehrmacht_soilder_A also carries the hands, so the owner has no
+        // hands yet.
+        static readonly string[] OwnerHiddenMeshNames = { "Helmet", "Wehrmacht_soilder_A" };
+
         [SerializeField] WeaponDefinition[] slots;
         [SerializeField] Transform viewmodelAnchor;
         [SerializeField] Transform visualsRoot;
@@ -47,6 +52,7 @@ namespace AnimeFpsGame.Player
         float serverNextAnyShotTime;
 
         public Camera ViewCamera => viewCamera;
+        public Transform VisualsRoot => visualsRoot;
         public Health Health => health;
         public int CurrentSlot => activeSlot.Value;
         public int SlotCount => slots?.Length ?? 0;
@@ -574,7 +580,7 @@ namespace AnimeFpsGame.Player
             }
         }
 
-        /// <summary>Own body is hidden from the owner's camera; other clients see the soldier and one gun.</summary>
+        /// <summary>Owner sees their body without head or hands; other clients see the soldier and one gun.</summary>
         void ApplyVisibleWeaponMeshes(WeaponDefinition definition)
         {
             if (visualsRoot == null)
@@ -584,21 +590,25 @@ namespace AnimeFpsGame.Player
 
             // Keep the Visuals root active: it carries the Animator that NetworkAnimator replicates,
             // and a disabled Animator silently drops every SetInteger call.
+            var soldierMeshName = definition != null ? definition.soldierMeshName : null;
             foreach (var renderer in visualsRoot.GetComponentsInChildren<Renderer>(true))
             {
-                if (IsOwner)
-                {
-                    renderer.enabled = false;
-                    continue;
-                }
-
-                if (System.Array.IndexOf(WeaponMeshNames, renderer.gameObject.name) < 0)
-                {
-                    continue;
-                }
-
-                renderer.enabled = renderer.gameObject.name == definition.soldierMeshName;
+                renderer.enabled = ShouldRenderSoldierMesh(IsOwner, renderer.gameObject.name, soldierMeshName);
             }
+        }
+
+        /// <summary>Owner: body only, no head/helmet and no held weapon mesh. Everyone else: the whole
+        /// soldier plus exactly the weapon for the active slot.</summary>
+        public static bool ShouldRenderSoldierMesh(bool isOwner, string meshName, string soldierMeshName)
+        {
+            var isWeapon = System.Array.IndexOf(WeaponMeshNames, meshName) >= 0;
+
+            if (isOwner)
+            {
+                return !isWeapon && System.Array.IndexOf(OwnerHiddenMeshNames, meshName) < 0;
+            }
+
+            return !isWeapon || meshName == soldierMeshName;
         }
 
         void BindActiveGun()

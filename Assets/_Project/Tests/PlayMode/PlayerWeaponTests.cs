@@ -129,6 +129,79 @@ namespace AnimeFpsGame.Tests
             Assert.Less(angle, 15f, "The barrel must point where the camera looks");
         }
 
+        [Test]
+        public void OwnerShowsBodyButNotHeadOrHeldWeapon()
+        {
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(true, "Jacket", "K98"));
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(true, "Throusers", "K98"));
+            Assert.IsFalse(PlayerWeapons.ShouldRenderSoldierMesh(true, "Helmet", "K98"));
+            Assert.IsFalse(PlayerWeapons.ShouldRenderSoldierMesh(true, "Wehrmacht_soilder_A", "K98"));
+            Assert.IsFalse(PlayerWeapons.ShouldRenderSoldierMesh(true, "K98", "K98"));
+        }
+
+        [Test]
+        public void RemoteShowsWholeBodyAndOnlyTheHeldWeapon()
+        {
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(false, "Jacket", "K98"));
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(false, "Helmet", "K98"));
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(false, "Wehrmacht_soilder_A", "K98"));
+            Assert.IsTrue(PlayerWeapons.ShouldRenderSoldierMesh(false, "K98", "K98"));
+            Assert.IsFalse(PlayerWeapons.ShouldRenderSoldierMesh(false, "Luger_P08", "K98"));
+        }
+
+        [UnityTest]
+        public IEnumerator OwnerSeesBodyWithoutHeadOrHeldWeapon()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons, "Player must spawn");
+            Assert.IsNotNull(weapons.VisualsRoot, "Player must have a Visuals root");
+
+            var renderers = weapons.VisualsRoot.GetComponentsInChildren<Renderer>(true);
+
+            Renderer Named(string name)
+            {
+                foreach (var renderer in renderers)
+                {
+                    if (renderer.gameObject.name == name)
+                    {
+                        return renderer;
+                    }
+                }
+
+                Assert.Fail($"Missing renderer {name}");
+                return null;
+            }
+
+            Assert.IsTrue(Named("Jacket").enabled, "Owner must see the jacket and its arms");
+            Assert.IsTrue(Named("Throusers").enabled, "Owner must see their legs");
+            Assert.IsFalse(Named("Helmet").enabled, "The helmet would swallow the camera");
+            Assert.IsFalse(Named("Wehrmacht_soilder_A").enabled, "The head mesh would swallow the camera");
+            Assert.IsFalse(Named("K98").enabled, "The held gun must be the viewmodel, not the body's mesh");
+
+            var eye = weapons.ViewCamera.transform.position;
+            foreach (var renderer in renderers)
+            {
+                if (!renderer.enabled)
+                {
+                    continue;
+                }
+
+                Assert.IsFalse(renderer.bounds.Contains(eye),
+                    $"{renderer.gameObject.name} is enabled and contains the camera");
+            }
+        }
+
         [UnityTest]
         public IEnumerator EveryWeaponSlotShowsAVisibleGun()
         {
