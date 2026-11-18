@@ -255,9 +255,11 @@ namespace AnimeFpsGame.Player
                 effects.PlayLocal(MuzzleWorldPosition, shot.Origin, shot.Directions, hits);
             }
 
+            var muzzle = MuzzleWorldPosition;
+
             if (IsSpawned)
             {
-                FireServerRpc(shot.Slot, shot.Origin, shot.Directions);
+                FireServerRpc(shot.Slot, shot.Origin, muzzle, shot.Directions);
             }
 
             viewmodelKickBack += 0.02f;
@@ -296,7 +298,8 @@ namespace AnimeFpsGame.Player
         /// range, origin, aim cone and cadence are all checked here before any health changes.
         /// </summary>
         [ServerRpc]
-        void FireServerRpc(byte slot, Vector3 origin, Vector3[] directions, ServerRpcParams rpcParams = default)
+        void FireServerRpc(byte slot, Vector3 origin, Vector3 muzzleOrigin, Vector3[] directions,
+            ServerRpcParams rpcParams = default)
         {
             if (health != null && health.IsDead)
             {
@@ -325,6 +328,11 @@ namespace AnimeFpsGame.Player
             }
 
             if (Vector3.Distance(origin, transform.position) > 3f)
+            {
+                return;
+            }
+
+            if (Vector3.Distance(muzzleOrigin, transform.position) > 3f)
             {
                 return;
             }
@@ -402,17 +410,17 @@ namespace AnimeFpsGame.Player
                 Send = new ClientRpcSendParams { TargetClientIds = targets }
             };
 
-            FireEffectClientRpc(slot, origin, validated.ToArray(), points.ToArray(), normals.ToArray(),
-                targetsParams);
+            FireEffectClientRpc(slot, origin, muzzleOrigin, validated.ToArray(), points.ToArray(),
+                normals.ToArray(), targetsParams);
         }
 
         [ClientRpc]
-        void FireEffectClientRpc(byte slot, Vector3 origin, Vector3[] directions, Vector3[] points,
-            Vector3[] normals, ClientRpcParams rpcParams = default)
+        void FireEffectClientRpc(byte slot, Vector3 origin, Vector3 muzzleOrigin, Vector3[] directions,
+            Vector3[] points, Vector3[] normals, ClientRpcParams rpcParams = default)
         {
             if (effects != null)
             {
-                effects.PlayRemote(origin, directions, points);
+                effects.PlayRemote(muzzleOrigin, origin, directions, points);
             }
         }
 

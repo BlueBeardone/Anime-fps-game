@@ -68,20 +68,21 @@ namespace AnimeFpsGame.Effects
         }
 
         /// <summary>Feedback for everyone else, from the server's validated hit points.</summary>
-        public void PlayRemote(Vector3 origin, Vector3[] directions, Vector3[] points)
+        public void PlayRemote(Vector3 muzzleOrigin, Vector3 rayOrigin, Vector3[] directions,
+            Vector3[] points)
         {
             if (directions == null)
             {
                 return;
             }
 
-            PlayFlash(origin);
+            PlayFlash(muzzleOrigin);
 
             for (var i = 0; i < directions.Length; i++)
             {
                 var hasPoint = points != null && i < points.Length;
-                var end = hasPoint ? points[i] : origin + directions[i] * tracerMissDistance;
-                PlayTracer(origin, end);
+                var end = hasPoint ? points[i] : rayOrigin + directions[i] * tracerMissDistance;
+                PlayTracer(muzzleOrigin, end);
 
                 if (hasPoint)
                 {
