@@ -203,6 +203,46 @@ namespace AnimeFpsGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator DeadOwnerBodyIsHidden()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons, "Player must spawn");
+            Assert.IsNotNull(weapons.Health, "Player must have health");
+            Assert.IsNotNull(weapons.VisualsRoot, "Player must have a Visuals root");
+            Assert.IsFalse(weapons.Health.IsDead);
+
+            weapons.Health.ApplyDamage(weapons.Health.MaxHealth + 1f, weapons.transform.position,
+                Vector3.up, 999);
+
+            deadline = Time.realtimeSinceStartup + 5f;
+            while (!weapons.Health.IsDead && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(weapons.Health.IsDead, "Player must die");
+
+            foreach (var renderer in weapons.VisualsRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                Assert.IsFalse(renderer.enabled,
+                    $"{renderer.gameObject.name} must be hidden while dead");
+            }
+
+            Assert.IsFalse(weapons.CurrentViewmodel.activeInHierarchy, "The viewmodel must be hidden while dead");
+        }
+
+        [UnityTest]
         public IEnumerator EveryWeaponSlotShowsAVisibleGun()
         {
             SceneManager.LoadScene("Main");
@@ -240,6 +280,9 @@ namespace AnimeFpsGame.Tests
                 var longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
                 Assert.Greater(longest, 0.1f,
                     $"Slot {slot} viewmodel is {longest:F3} m long; the placeholder scale made it invisible");
+
+                var angle = Vector3.Angle(viewmodel.transform.forward, weapons.ViewCamera.transform.forward);
+                Assert.Less(angle, 15f, $"Slot {slot} barrel points {angle:F0}° away from the camera");
             }
         }
 

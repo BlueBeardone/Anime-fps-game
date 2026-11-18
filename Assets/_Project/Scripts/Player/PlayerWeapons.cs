@@ -470,10 +470,21 @@ namespace AnimeFpsGame.Player
                     currentViewmodel.SetActive(false);
                 }
 
-                // Remote corpses disappear; the owner only loses the viewmodel and the HUD.
-                if (visualsRoot != null && !IsOwner)
+                // Remote corpses disappear; the owner loses the viewmodel, the HUD and their own
+                // body, so a death while crouched cannot freeze the camera inside the chest.
+                if (visualsRoot != null)
                 {
-                    visualsRoot.gameObject.SetActive(false);
+                    if (IsOwner)
+                    {
+                        foreach (var renderer in visualsRoot.GetComponentsInChildren<Renderer>(true))
+                        {
+                            renderer.enabled = false;
+                        }
+                    }
+                    else
+                    {
+                        visualsRoot.gameObject.SetActive(false);
+                    }
                 }
 
                 return;

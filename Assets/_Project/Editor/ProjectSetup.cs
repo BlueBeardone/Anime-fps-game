@@ -382,11 +382,11 @@ namespace AnimeFpsGame.EditorTools
             ConfigureSlot(slots.GetArrayElementAtIndex(0), "Rifle", "status_k98", "K98", k98Viewmodel,
                 new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, rifleStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(1), "Handgun", "Status_LugerP08", "Luger_P08", lugerViewmodel,
-                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 90f, 0f), 0.5f, handgunStats);
+                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 0f, 0f), 0.5f, handgunStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(2), "SMG", "status_MP40", "MP40", mp40Viewmodel,
-                new Vector3(0.22f, -0.2f, 0.45f), new Vector3(0f, 90f, 0f), 0.5f, smgStats);
+                new Vector3(0.22f, -0.2f, 0.45f), new Vector3(0f, 0f, 0f), 0.5f, smgStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(3), "Shotgun", "status_k98", "K98", k98Viewmodel,
-                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 90f, 0f), 0.5f, shotgunStats);
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, shotgunStats);
             weaponsSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             SetLayerRecursively(root, playerLayer);
