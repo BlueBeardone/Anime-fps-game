@@ -12,6 +12,7 @@ namespace AnimeFpsGame.Weapons
         int ReserveAmmo { get; }
         bool IsReloading { get; }
         float ReloadProgress01 { get; }
+        float BoltCycleProgress01 { get; }
         float CurrentSpreadDegrees { get; }
         bool CanFire(float now);
 

@@ -9,6 +9,9 @@ namespace AnimeFpsGame.Tests
         static GunStats TestStats()
         {
             var stats = Rifle.CreateDefaultStats();
+            stats.fireMode = FireMode.FullAuto;
+            stats.boltCycleSeconds = 0f;
+            stats.boltRecoilDegrees = Vector2.zero;
             stats.baseSpreadDegrees = 0f;
             stats.bloomPerShotDegrees = 0f;
             stats.magazineSize = 3;
@@ -211,6 +214,109 @@ namespace AnimeFpsGame.Tests
             asset.stats = Handgun.CreateDefaultStats();
             Assert.AreEqual(GunArchetype.Handgun, asset.stats.archetype);
             Object.DestroyImmediate(asset);
+        }
+
+        static GunStats BoltStats()
+        {
+            var stats = TestStats();
+            stats.fireMode = FireMode.BoltAction;
+            stats.boltCycleSeconds = 1f;
+            return stats;
+        }
+
+        [Test]
+        public void BoltActionFiresOnlyOnPress()
+        {
+            var gun = new Rifle(BoltStats());
+
+            Assert.IsFalse(Fire(gun, 0f, pressed: false, held: true),
+                "Holding the trigger must not fire a bolt action");
+            Assert.IsTrue(Fire(gun, 0f));
+            Assert.IsFalse(Fire(gun, 1.01f, pressed: false, held: true),
+                "Holding after the cycle must not auto-fire");
+            Assert.IsTrue(Fire(gun, 1.01f));
+        }
+
+        [Test]
+        public void BoltActionLocksFiringForTheBoltCycle()
+        {
+            var gun = new Rifle(BoltStats());
+
+            Assert.IsTrue(Fire(gun, 0f));
+            Assert.IsFalse(Fire(gun, 0.5f), "The bolt cycle blocks the next shot");
+            Assert.IsTrue(Fire(gun, 1.01f), "The next shot works after one second");
+        }
+
+        [Test]
+        public void BoltActionWithoutBoltCycleFallsBackToRpm()
+        {
+            var stats = BoltStats();
+            stats.boltCycleSeconds = 0f;
+            stats.roundsPerMinute = 600f;
+            var gun = new Rifle(stats);
+
+            Assert.IsTrue(Fire(gun, 0f));
+            Assert.IsFalse(Fire(gun, 0.05f));
+            Assert.IsTrue(Fire(gun, 0.11f));
+        }
+
+        [Test]
+        public void BoltActionReloadsAfterFiveRounds()
+        {
+            var stats = BoltStats();
+            stats.magazineSize = 5;
+            stats.reserveAmmo = 10;
+            var gun = new Rifle(stats);
+
+            for (var i = 0; i < 5; i++)
+            {
+                Assert.IsTrue(Fire(gun, i * 1.01f), $"Shot {i + 1} must fire");
+            }
+
+            Assert.AreEqual(0, gun.AmmoInMagazine);
+            Assert.IsTrue(gun.IsReloading, "The fifth shot starts the normal reload");
+        }
+
+        [Test]
+        public void BoltActionKicksTheSameEveryShot()
+        {
+            var stats = BoltStats();
+            stats.boltRecoilDegrees = new Vector2(0.5f, 2f);
+            var gun = new Rifle(stats);
+            var kicks = new System.Collections.Generic.List<Vector2>();
+            gun.RecoilKicked += kicks.Add;
+
+            Fire(gun, 0f);
+            Fire(gun, 1.01f);
+
+            Assert.AreEqual(2, kicks.Count);
+            Assert.AreEqual(new Vector2(0.5f, 2f), kicks[0], "First shot kicks");
+            Assert.AreEqual(new Vector2(0.5f, 2f), kicks[1], "Every bolt-action shot kicks the same");
+        }
+
+        [Test]
+        public void BoltCycleProgressRunsThenClears()
+        {
+            var gun = new Rifle(BoltStats());
+
+            Fire(gun, 0f);
+            Assert.AreEqual(0f, gun.BoltCycleProgress01, 0.01f);
+            gun.Tick(0.5f);
+            Assert.AreEqual(0.5f, gun.BoltCycleProgress01, 0.01f);
+            gun.Tick(0.6f);
+            Assert.AreEqual(0f, gun.BoltCycleProgress01, 0.01f);
+        }
+
+        [Test]
+        public void BoltCycleAdvancesWhileStowed()
+        {
+            var gun = new Rifle(BoltStats());
+
+            Assert.IsTrue(Fire(gun, 0f));
+            gun.CancelReload();
+            gun.Tick(1.01f);
+
+            Assert.IsTrue(Fire(gun, 1.01f), "Stowing must not leave the bolt locked");
         }
     }
 }

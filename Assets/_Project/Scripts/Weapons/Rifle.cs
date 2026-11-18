@@ -19,19 +19,21 @@ namespace AnimeFpsGame.Weapons
             {
                 displayName = "Rifle",
                 archetype = GunArchetype.Rifle,
-                fireMode = FireMode.FullAuto,
+                fireMode = FireMode.BoltAction,
                 roundsPerMinute = 600f,
-                damage = 24f,
+                damage = 55f,
                 pellets = 1,
-                magazineSize = 30,
-                reserveAmmo = 120,
+                magazineSize = 5,
+                reserveAmmo = 30,
                 reloadSeconds = 2.2f,
                 range = 200f,
                 baseSpreadDegrees = 0.25f,
                 bloomPerShotDegrees = 0.35f,
                 maxBloomDegrees = 3.5f,
                 bloomRecoveryDegreesPerSecond = 8f,
-                sprayResetSeconds = 0.4f
+                sprayResetSeconds = 0.4f,
+                boltCycleSeconds = 1f,
+                boltRecoilDegrees = new Vector2(0.4f, 2.2f)
             };
         }
 

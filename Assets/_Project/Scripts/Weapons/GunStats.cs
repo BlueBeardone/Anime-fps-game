@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace AnimeFpsGame.Weapons
 {
@@ -22,6 +23,8 @@ namespace AnimeFpsGame.Weapons
         public float bloomRecoveryDegreesPerSecond = 8f;
         public float sprayResetSeconds = 0.4f;
         public float pelletSpreadDegrees;
+        public float boltCycleSeconds;
+        public Vector2 boltRecoilDegrees;
 
         public GunStats Clone()
         {

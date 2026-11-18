@@ -17,6 +17,7 @@ namespace AnimeFpsGame.Weapons
         int reserveAmmo;
         bool isReloading;
         float reloadRemaining;
+        float boltRemaining;
         float nextFireTime = float.NegativeInfinity;
         float bloomDegrees;
         float timeSinceLastShot = 999f;
@@ -58,6 +59,11 @@ namespace AnimeFpsGame.Weapons
             }
         }
 
+        public float BoltCycleProgress01 =>
+            boltRemaining > 0f && stats.boltCycleSeconds > 0f
+                ? Mathf.Clamp01(1f - boltRemaining / stats.boltCycleSeconds)
+                : 0f;
+
         public event Action<Vector2> RecoilKicked;
         public event Action AmmoChanged;
         public event Action ReloadStateChanged;
@@ -70,6 +76,11 @@ namespace AnimeFpsGame.Weapons
         public virtual void Tick(float deltaTime)
         {
             timeSinceLastShot += deltaTime;
+
+            if (boltRemaining > 0f)
+            {
+                boltRemaining = Mathf.Max(0f, boltRemaining - deltaTime);
+            }
 
             if (timeSinceLastShot > 0.15f)
             {
@@ -104,7 +115,9 @@ namespace AnimeFpsGame.Weapons
                 return false;
             }
 
-            if (stats.fireMode == FireMode.SemiAuto && !triggerPressed)
+            var boltAction = stats.fireMode == FireMode.BoltAction;
+
+            if ((stats.fireMode == FireMode.SemiAuto || boltAction) && !triggerPressed)
             {
                 return false;
             }
@@ -119,16 +132,29 @@ namespace AnimeFpsGame.Weapons
                 sprayIndex = 0;
             }
 
-            var pattern = SprayPattern;
-            var index = Mathf.Clamp(sprayIndex, 0, pattern.Length - 1);
-            var previous = index > 0 ? pattern[index - 1] : Vector2.zero;
-            var kick = pattern[index] - previous;
-            sprayIndex = Mathf.Min(sprayIndex + 1, pattern.Length - 1);
+            var kick = Vector2.zero;
+            if (!boltAction)
+            {
+                var pattern = SprayPattern;
+                var index = Mathf.Clamp(sprayIndex, 0, pattern.Length - 1);
+                var previous = index > 0 ? pattern[index - 1] : Vector2.zero;
+                kick = pattern[index] - previous;
+                sprayIndex = Mathf.Min(sprayIndex + 1, pattern.Length - 1);
+            }
 
             ammoInMagazine--;
-            nextFireTime = now + 60f / Mathf.Max(1f, stats.roundsPerMinute);
+            nextFireTime = now + (boltAction && stats.boltCycleSeconds > 0f
+                ? stats.boltCycleSeconds
+                : 60f / Mathf.Max(1f, stats.roundsPerMinute));
             timeSinceLastShot = 0f;
             bloomDegrees = Mathf.Min(stats.maxBloomDegrees, bloomDegrees + stats.bloomPerShotDegrees);
+
+            if (boltAction)
+            {
+                boltRemaining = stats.boltCycleSeconds;
+                sprayIndex = 0;
+                kick = stats.boltRecoilDegrees;
+            }
 
             shot = new ShotSpec
             {
@@ -190,6 +216,7 @@ namespace AnimeFpsGame.Weapons
             reserveAmmo = stats.reserveAmmo;
             isReloading = false;
             reloadRemaining = 0f;
+            boltRemaining = 0f;
             nextFireTime = float.NegativeInfinity;
             bloomDegrees = 0f;
             timeSinceLastShot = 999f;

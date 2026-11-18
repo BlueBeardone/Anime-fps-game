@@ -15,12 +15,12 @@ MonoBehaviour:
   stats:
     displayName: Rifle
     archetype: 0
-    fireMode: 1
+    fireMode: 2
     roundsPerMinute: 600
-    damage: 24
+    damage: 55
     pellets: 1
-    magazineSize: 30
-    reserveAmmo: 120
+    magazineSize: 5
+    reserveAmmo: 30
     reloadSeconds: 2.2
     range: 200
     baseSpreadDegrees: 0.25
@@ -29,3 +29,5 @@ MonoBehaviour:
     bloomRecoveryDegreesPerSecond: 8
     sprayResetSeconds: 0.4
     pelletSpreadDegrees: 0
+    boltCycleSeconds: 1
+    boltRecoilDegrees: {x: 0.4, y: 2.2}
