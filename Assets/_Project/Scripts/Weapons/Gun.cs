@@ -73,6 +73,20 @@ namespace AnimeFpsGame.Weapons
             return !isReloading && ammoInMagazine > 0 && now >= nextFireTime;
         }
 
+        /// <summary>Minimum seconds between shots, shared by the client gun loop and the server check.
+        /// A configured bolt cycle wins; zero or negative values fall back to the RPM interval.</summary>
+        public static float ShotIntervalSeconds(GunStats stats)
+        {
+            if (stats == null)
+            {
+                return 0f;
+            }
+
+            return stats.fireMode == FireMode.BoltAction && stats.boltCycleSeconds > 0f
+                ? stats.boltCycleSeconds
+                : 60f / Mathf.Max(1f, stats.roundsPerMinute);
+        }
+
         public virtual void Tick(float deltaTime)
         {
             timeSinceLastShot += deltaTime;
@@ -143,9 +157,7 @@ namespace AnimeFpsGame.Weapons
             }
 
             ammoInMagazine--;
-            nextFireTime = now + (boltAction && stats.boltCycleSeconds > 0f
-                ? stats.boltCycleSeconds
-                : 60f / Mathf.Max(1f, stats.roundsPerMinute));
+            nextFireTime = now + ShotIntervalSeconds(stats);
             timeSinceLastShot = 0f;
             bloomDegrees = Mathf.Min(stats.maxBloomDegrees, bloomDegrees + stats.bloomPerShotDegrees);
 

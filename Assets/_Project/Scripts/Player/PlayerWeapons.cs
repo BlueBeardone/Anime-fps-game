@@ -53,11 +53,29 @@ namespace AnimeFpsGame.Player
         public GameObject CurrentViewmodel => currentViewmodel;
         public bool IsDead => health != null && health.IsDead;
 
-        public Vector3 MuzzleWorldPosition => currentViewmodel != null
-            ? currentViewmodel.transform.TransformPoint(muzzleLocal)
-            : viewCamera != null
-                ? viewCamera.transform.position + viewCamera.transform.forward * 0.5f
-                : transform.position + transform.forward * 0.5f;
+        public Vector3 MuzzleWorldPosition
+        {
+            get
+            {
+                var cameraTransform = viewCamera != null ? viewCamera.transform : null;
+                var fallback = cameraTransform != null
+                    ? cameraTransform.position + cameraTransform.forward * 0.5f
+                    : transform.position + transform.forward * 0.5f;
+
+                if (currentViewmodel == null)
+                {
+                    return fallback;
+                }
+
+                var candidate = currentViewmodel.transform.TransformPoint(muzzleLocal);
+                // A replacement viewmodel or a tuned marker can put the muzzle at or behind the
+                // camera plane; firing the flash there would white out the screen.
+                return cameraTransform != null &&
+                       Vector3.Dot(candidate - cameraTransform.position, cameraTransform.forward) <= 0.01f
+                    ? fallback
+                    : candidate;
+            }
+        }
 
         public IGun ActiveGun =>
             guns != null && CurrentSlot >= 0 && CurrentSlot < guns.Length ? guns[CurrentSlot] : null;
@@ -378,7 +396,7 @@ namespace AnimeFpsGame.Player
             }
 
             // A small tolerance keeps client/server frame jitter from rejecting legitimate shots.
-            serverNextShotTime[slot] = now + 60f / Mathf.Max(1f, stats.roundsPerMinute) * 0.8f;
+            serverNextShotTime[slot] = now + Gun.ShotIntervalSeconds(stats) * 0.8f;
             // 20 shots/s ceiling: above the fastest configured gun (SMG, 15/s), so it only
             // catches clients alternating slots to exceed any single gun's cadence.
             serverNextAnyShotTime = now + 0.05f;

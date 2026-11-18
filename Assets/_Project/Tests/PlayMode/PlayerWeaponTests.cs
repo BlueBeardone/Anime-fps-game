@@ -130,6 +130,35 @@ namespace AnimeFpsGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator MuzzleFallsBackInFrontWhenViewmodelIsBehindCamera()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons);
+            Assert.IsNotNull(weapons.CurrentViewmodel);
+
+            // Stop the feel update from restoring the slot position for this frame.
+            weapons.enabled = false;
+            weapons.CurrentViewmodel.transform.localPosition = new Vector3(0f, 0f, -1f);
+
+            var camera = weapons.ViewCamera.transform;
+            var toMuzzle = weapons.MuzzleWorldPosition - camera.position;
+
+            Assert.Greater(Vector3.Dot(toMuzzle, camera.forward), 0f,
+                "A muzzle behind the camera must fall back to a point in front of it");
+        }
+
+        [UnityTest]
         public IEnumerator MuzzleIsInFrontOfTheCamera()
         {
             SceneManager.LoadScene("Main");

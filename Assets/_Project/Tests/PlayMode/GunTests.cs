@@ -238,6 +238,26 @@ namespace AnimeFpsGame.Tests
         }
 
         [Test]
+        public void ShotIntervalUsesTheBoltCycleWhenConfigured()
+        {
+            var stats = BoltStats();
+            Assert.AreEqual(1f, Gun.ShotIntervalSeconds(stats), 0.001f);
+
+            stats.boltCycleSeconds = 0f;
+            Assert.AreEqual(0.1f, Gun.ShotIntervalSeconds(stats), 0.001f,
+                "A zero bolt cycle falls back to the RPM interval");
+
+            stats.boltCycleSeconds = -1f;
+            Assert.AreEqual(0.1f, Gun.ShotIntervalSeconds(stats), 0.001f,
+                "A negative bolt cycle falls back to the RPM interval");
+
+            stats = BoltStats();
+            stats.fireMode = FireMode.FullAuto;
+            Assert.AreEqual(0.1f, Gun.ShotIntervalSeconds(stats), 0.001f,
+                "Only a configured bolt action uses the bolt cycle");
+        }
+
+        [Test]
         public void BoltActionLocksFiringForTheBoltCycle()
         {
             var gun = new Rifle(BoltStats());
