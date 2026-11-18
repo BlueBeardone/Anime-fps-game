@@ -1,7 +1,7 @@
 # Anime FPS Game — Bolt-Action Rifle, Held Viewmodel and Muzzle Tracers
 
 Date: 2026-11-18
-Status: awaiting approval
+Status: approved and implemented
 
 ## Intent
 

@@ -34,7 +34,7 @@ times out, allow the game through the Windows firewall on the host.
 | Space | jump |
 | C | crouch (hold) |
 | 1 / 2, or mouse wheel | cycle all four weapons (Rifle → Handgun → SMG → Shotgun) |
-| Left mouse | fire (hold for the full-auto Rifle and SMG) |
+| Left mouse | fire (Rifle: one shot per press; hold for the SMG) |
 | R | reload |
 
 Each client spawns on its own marker (`SpawnPoint 1`–`4` in `Main.unity`); you see other players'
@@ -103,6 +103,10 @@ Each slot has a `GunStatsAsset` at `Settings/Weapons/`; tune cadence, damage, pe
 reserve, reload, range, bloom and pellet spread there. **`Run All` never overwrites an existing
 asset**, so Inspector edits survive regeneration. Delete an asset if you want the defaults back.
 
+The Rifle is a 5-round bolt action: one shot, a 1 s bolt cycle, then the normal 2.2 s reload after
+the fifth round or on R. Tracers and the muzzle flash start at the held gun's muzzle; the camera
+ray still decides aim and damage.
+
 The gun rules live in plain C# (`IGun` / `Gun`), so they are unit-tested without a scene. Each
 `PlayerWeapons` builds one gun instance per slot and keeps it for the player's lifetime, so ammo
 and reloads survive weapon switches. Ammo is owner-authoritative; **damage is server-authoritative**
@@ -116,6 +120,8 @@ A weapon slot is four things:
 - `viewmodelPrefab` — what the owner holds in first person
 - viewmodel position / rotation / scale (tune these; they are placeholder values)
 - `stats` — the `GunStatsAsset` that drives that slot
+- muzzle is derived from the viewmodel (a child named Muzzle overrides it), so replacement
+  viewmodels work without code changes
 
 Add a slot in `Player.prefab` → `PlayerWeapons` → `slots` and extend the mesh-name list in
 `PlayerWeapons.cs` if you add a weapon outside the pack.
