@@ -130,6 +130,47 @@ namespace AnimeFpsGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator EveryWeaponSlotShowsAVisibleGun()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while (weapons == null && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons, "Player must spawn");
+            Assert.AreEqual(4, weapons.SlotCount);
+
+            for (var slot = 0; slot < weapons.SlotCount; slot++)
+            {
+                weapons.SetSlot((byte)slot);
+                yield return null;
+
+                var viewmodel = weapons.CurrentViewmodel;
+                Assert.IsNotNull(viewmodel, $"Slot {slot} must instantiate a viewmodel");
+
+                var renderers = viewmodel.GetComponentsInChildren<Renderer>();
+                Assert.IsNotEmpty(renderers, $"Slot {slot} viewmodel must have geometry");
+
+                var bounds = renderers[0].bounds;
+                for (var i = 1; i < renderers.Length; i++)
+                {
+                    bounds.Encapsulate(renderers[i].bounds);
+                }
+
+                var longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+                Assert.Greater(longest, 0.1f,
+                    $"Slot {slot} viewmodel is {longest:F3} m long; the placeholder scale made it invisible");
+            }
+        }
+
+        [UnityTest]
         public IEnumerator MuzzleFallsBackInFrontWhenViewmodelIsBehindCamera()
         {
             SceneManager.LoadScene("Main");

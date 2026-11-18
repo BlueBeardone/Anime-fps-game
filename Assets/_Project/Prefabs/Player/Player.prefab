@@ -435,7 +435,7 @@ MonoBehaviour:
     viewmodelPrefab: {fileID: 1733870605739572, guid: 4e0e2c76fc3c857429fa82f9df4cf4f6, type: 3}
     viewmodelLocalPosition: {x: 0.24, y: -0.22, z: 0.48}
     viewmodelLocalEuler: {x: 0, y: 0, z: 0}
-    viewmodelScale: 0.08
+    viewmodelScale: 0.5
     stats: {fileID: 11400000, guid: b4f95c9b17ceb7f46b40e928f0889b02, type: 2}
   - displayName: Handgun
     animatorInt: Status_LugerP08
@@ -443,7 +443,7 @@ MonoBehaviour:
     viewmodelPrefab: {fileID: 1447866953268326, guid: c2292a4e185309b4a85041a3d9269882, type: 3}
     viewmodelLocalPosition: {x: 0.2, y: -0.18, z: 0.38}
     viewmodelLocalEuler: {x: 0, y: 90, z: 0}
-    viewmodelScale: 0.08
+    viewmodelScale: 0.5
     stats: {fileID: 11400000, guid: 5481cf13e9c63b34a9c0f5c8ed2d67c0, type: 2}
   - displayName: SMG
     animatorInt: status_MP40
@@ -451,7 +451,7 @@ MonoBehaviour:
     viewmodelPrefab: {fileID: 1034931416371988, guid: 868015f4361fdf848b8a7b5ad25f0d1e, type: 3}
     viewmodelLocalPosition: {x: 0.22, y: -0.2, z: 0.45}
     viewmodelLocalEuler: {x: 0, y: 90, z: 0}
-    viewmodelScale: 0.08
+    viewmodelScale: 0.5
     stats: {fileID: 11400000, guid: 71bd69ce74c15be4684f2f0c5b04e1e8, type: 2}
   - displayName: Shotgun
     animatorInt: status_k98
@@ -459,7 +459,7 @@ MonoBehaviour:
     viewmodelPrefab: {fileID: 1733870605739572, guid: 4e0e2c76fc3c857429fa82f9df4cf4f6, type: 3}
     viewmodelLocalPosition: {x: 0.24, y: -0.22, z: 0.48}
     viewmodelLocalEuler: {x: 0, y: 90, z: 0}
-    viewmodelScale: 0.08
+    viewmodelScale: 0.5
     stats: {fileID: 11400000, guid: f644a63b36794784ebd928da2ea75fdc, type: 2}
   viewmodelAnchor: {fileID: 7625127871244334510}
   visualsRoot: {fileID: 1795611954203430652}
