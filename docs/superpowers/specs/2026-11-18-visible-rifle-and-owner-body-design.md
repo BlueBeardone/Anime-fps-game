@@ -1,6 +1,6 @@
 # Visible rifle and owner body — design
 
-Status: awaiting approval
+Status: approved and implemented
 Date: 2026-11-18
 Branch: `master` (continues the bolt-action rifle work)
 

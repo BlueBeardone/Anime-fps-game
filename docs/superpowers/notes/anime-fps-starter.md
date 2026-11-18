@@ -37,8 +37,9 @@ times out, allow the game through the Windows firewall on the host.
 | Left mouse | fire (Rifle: one shot per press; hold for the SMG) |
 | R | reload |
 
-Each client spawns on its own marker (`SpawnPoint 1`–`4` in `Main.unity`); you see other players'
-soldiers, never your own body.
+Each client spawns on its own marker (`SpawnPoint 1`–`4` in `Main.unity`). You see your own jacket,
+arms and legs, but not your head, hands or a body-carried weapon: the held gun is the viewmodel.
+Other players see your full soldier plus the weapon for your active slot.
 
 ## Where things live
 
@@ -106,6 +107,10 @@ asset**, so Inspector edits survive regeneration. Delete an asset if you want th
 The Rifle is a 5-round bolt action: one shot, a 1 s bolt cycle, then the normal 2.2 s reload after
 the fifth round or on R. Tracers and the muzzle flash start at the held gun's muzzle; the camera
 ray still decides aim and damage.
+
+Every slot's `viewmodelScale` is `0.5`; the original `0.08` made each gun about 9 cm long on
+screen. Position, rotation and scale are per-slot placeholder tuning values, safe to edit in the
+Inspector.
 
 The gun rules live in plain C# (`IGun` / `Gun`), so they are unit-tested without a scene. Each
 `PlayerWeapons` builds one gun instance per slot and keeps it for the player's lifetime, so ammo
