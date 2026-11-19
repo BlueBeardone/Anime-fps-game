@@ -22,6 +22,7 @@ namespace AnimeFpsGame.Weapons
         bool TryStartReload();
         void CancelReload();
         void ResetAmmo();
+        void RestoreAmmo(int magazine, int reserve);
 
         event Action<Vector2> RecoilKicked;
         event Action AmmoChanged;

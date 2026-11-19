@@ -338,5 +338,26 @@ namespace AnimeFpsGame.Tests
 
             Assert.IsTrue(Fire(gun, 1.01f), "Stowing must not leave the bolt locked");
         }
+
+        [Test]
+        public void RestoreAmmoClampsAndRaisesEvents()
+        {
+            var gun = new Rifle(TestStats());
+            var ammoEvents = 0;
+            var reloadEvents = 0;
+            gun.AmmoChanged += () => ammoEvents++;
+            gun.ReloadStateChanged += () => reloadEvents++;
+
+            gun.RestoreAmmo(2, 4);
+            Assert.AreEqual(2, gun.AmmoInMagazine);
+            Assert.AreEqual(4, gun.ReserveAmmo);
+
+            gun.RestoreAmmo(99, 99);
+            Assert.AreEqual(3, gun.AmmoInMagazine, "Magazine clamps to the stats");
+            Assert.AreEqual(6, gun.ReserveAmmo, "Reserve clamps to the stats");
+            Assert.IsFalse(gun.IsReloading);
+            Assert.GreaterOrEqual(ammoEvents, 2);
+            Assert.GreaterOrEqual(reloadEvents, 2);
+        }
     }
 }

@@ -237,6 +237,22 @@ namespace AnimeFpsGame.Weapons
             ReloadStateChanged?.Invoke();
         }
 
+        /// <summary>Replaces the live ammo with carried rounds, e.g. a gun picked up off the ground.</summary>
+        public void RestoreAmmo(int magazine, int reserve)
+        {
+            ammoInMagazine = Mathf.Clamp(magazine, 0, stats.magazineSize);
+            reserveAmmo = Mathf.Clamp(reserve, 0, stats.reserveAmmo);
+            isReloading = false;
+            reloadRemaining = 0f;
+            boltRemaining = 0f;
+            nextFireTime = float.NegativeInfinity;
+            bloomDegrees = 0f;
+            timeSinceLastShot = 999f;
+            sprayIndex = 0;
+            AmmoChanged?.Invoke();
+            ReloadStateChanged?.Invoke();
+        }
+
         void CompleteReload()
         {
             var needed = stats.magazineSize - ammoInMagazine;
