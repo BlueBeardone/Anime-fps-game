@@ -191,7 +191,9 @@ namespace AnimeFpsGame.Weapons
             outgoingReserve = Mathf.Clamp(outgoingReserve, 0, outgoingStats.reserveAmmo);
 
             weapons.SwapSlotServer(slot, target.Archetype, incomingMagazine, incomingReserve);
-            target.NetworkObject.Despawn(true);
+            // Runtime drops are ours to destroy; a scene pickup stays alive but despawned, which is
+            // what NGO recommends for in-scene network objects.
+            target.NetworkObject.Despawn(target.IsRuntimeDrop);
             SpawnDrop(outgoing, outgoingMagazine, outgoingReserve);
             return true;
         }

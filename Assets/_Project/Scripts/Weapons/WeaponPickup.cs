@@ -32,6 +32,9 @@ namespace AnimeFpsGame.Weapons
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         bool initializedBySpawner;
+        GunArchetype pendingArchetype;
+        int pendingMagazine;
+        int pendingReserve;
         GameObject visual;
 
         public static IReadOnlyList<WeaponPickup> All
@@ -60,24 +63,33 @@ namespace AnimeFpsGame.Weapons
         public void Initialize(GunArchetype value, int magazine, int reserve)
         {
             initializedBySpawner = true;
-            runtimeDrop.Value = true;
-            archetype.Value = (byte)value;
-            magazineAmmo.Value = magazine;
-            reserveAmmo.Value = reserve;
+            pendingArchetype = value;
+            pendingMagazine = magazine;
+            pendingReserve = reserve;
         }
 
         public override void OnNetworkSpawn()
         {
             SpawnedAt = Time.time;
 
-            if (IsServer && !initializedBySpawner)
+            if (IsServer)
             {
-                var entry = FindEntry(initialArchetype);
-                archetype.Value = (byte)initialArchetype;
-                if (entry?.stats?.stats != null)
+                if (initializedBySpawner)
                 {
-                    magazineAmmo.Value = entry.stats.stats.magazineSize;
-                    reserveAmmo.Value = entry.stats.stats.reserveAmmo;
+                    runtimeDrop.Value = true;
+                    archetype.Value = (byte)pendingArchetype;
+                    magazineAmmo.Value = pendingMagazine;
+                    reserveAmmo.Value = pendingReserve;
+                }
+                else
+                {
+                    var entry = FindEntry(initialArchetype);
+                    archetype.Value = (byte)initialArchetype;
+                    if (entry?.stats?.stats != null)
+                    {
+                        magazineAmmo.Value = entry.stats.stats.magazineSize;
+                        reserveAmmo.Value = entry.stats.stats.reserveAmmo;
+                    }
                 }
             }
 
