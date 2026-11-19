@@ -308,7 +308,7 @@ public GunArchetype SwapSlotServer(byte slot, GunArchetype incoming, int magazin
 In `OnNetworkSpawn`, after the existing `activeSlot` subscription, add:
 
 ```csharp
-carriedArchetypes.OnValueChanged += OnCarriedArchetypesChanged;
+carriedArchetypes.OnListChanged += OnCarriedArchetypesChanged;
 if (IsServer && slots != null && carriedArchetypes.Count != slots.Length)
 {
     carriedArchetypes.Clear();
@@ -320,7 +320,8 @@ if (IsServer && slots != null && carriedArchetypes.Count != slots.Length)
 ```
 
 In `OnNetworkDespawn`, remove the subscription:
-`carriedArchetypes.OnValueChanged -= OnCarriedArchetypesChanged;`
+`carriedArchetypes.OnListChanged -= OnCarriedArchetypesChanged;` (this NGO version names the
+`NetworkList` event `OnListChanged`, not `OnValueChanged`; the handler signature is unchanged).
 
 Add the change handler and rebuild:
 
@@ -513,11 +514,16 @@ static void EnsurePlayerActions()
 
     if (changed)
     {
+        // The .inputactions file is a ScriptedImporter source asset, so AssetDatabase.SaveAssets
+        // alone does not rewrite its JSON. Serialize explicitly, then reimport so the newly
+        // loaded instance reflects the added actions.
         EditorUtility.SetDirty(asset);
-        AssetDatabase.SaveAssets();
+        File.WriteAllText(ActionsPath, asset.ToJson());
+        AssetDatabase.ImportAsset(ActionsPath, ImportAssetOptions.ForceUpdate);
+        asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(ActionsPath);
     }
 
-    if (wasEnabled)
+    if (wasEnabled && asset != null)
     {
         asset.Enable();
     }
@@ -697,6 +703,9 @@ namespace AnimeFpsGame.Weapons
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         bool initializedBySpawner;
+        GunArchetype pendingArchetype;
+        int pendingMagazine;
+        int pendingReserve;
         GameObject visual;
 
         public static IReadOnlyList<WeaponPickup> All
@@ -724,25 +733,35 @@ namespace AnimeFpsGame.Weapons
         /// <summary>Server-only, called before Spawn by a runtime drop.</summary>
         public void Initialize(GunArchetype value, int magazine, int reserve)
         {
+            // Stage plain values: writing a NetworkVariable before Spawn logs an NGO warning.
             initializedBySpawner = true;
-            runtimeDrop.Value = true;
-            archetype.Value = (byte)value;
-            magazineAmmo.Value = magazine;
-            reserveAmmo.Value = reserve;
+            pendingArchetype = value;
+            pendingMagazine = magazine;
+            pendingReserve = reserve;
         }
 
         public override void OnNetworkSpawn()
         {
             SpawnedAt = Time.time;
 
-            if (IsServer && !initializedBySpawner)
+            if (IsServer)
             {
-                var entry = FindEntry(initialArchetype);
-                archetype.Value = (byte)initialArchetype;
-                if (entry?.stats?.stats != null)
+                if (initializedBySpawner)
                 {
-                    magazineAmmo.Value = entry.stats.stats.magazineSize;
-                    reserveAmmo.Value = entry.stats.stats.reserveAmmo;
+                    runtimeDrop.Value = true;
+                    archetype.Value = (byte)pendingArchetype;
+                    magazineAmmo.Value = pendingMagazine;
+                    reserveAmmo.Value = pendingReserve;
+                }
+                else
+                {
+                    var entry = FindEntry(initialArchetype);
+                    archetype.Value = (byte)initialArchetype;
+                    if (entry?.stats?.stats != null)
+                    {
+                        magazineAmmo.Value = entry.stats.stats.magazineSize;
+                        reserveAmmo.Value = entry.stats.stats.reserveAmmo;
+                    }
                 }
             }
 
@@ -1036,13 +1055,34 @@ public IEnumerator SpawnedPlayerTracksNearestGroundGun()
     var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
     var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
     weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
-    weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+    Teleport(weapons, pickup.transform.position + new Vector3(0f, 1f, 1f));
 
     yield return null;
     yield return null;
 
     Assert.AreSame(pickup, interactor.NearestPickup);
     Assert.AreEqual(pickup.Archetype, interactor.NearestArchetype);
+}
+```
+
+Add `using AnimeFpsGame.Player;` to `WeaponPickupTests.cs` if it is missing (the test uses
+`PlayerWeapons`).
+
+Set the position through this helper, in both `WeaponPickupTests` and `WeaponHudTests`. Writing
+`weapons.transform.position` directly is sometimes reverted because the player has a non-kinematic
+`Rigidbody` with interpolation:
+
+```csharp
+static void Teleport(PlayerWeapons weapons, Vector3 position)
+{
+    var body = weapons.GetComponent<Rigidbody>();
+    if (body != null)
+    {
+        body.position = position;
+    }
+
+    weapons.transform.position = position;
+    Physics.SyncTransforms();
 }
 ```
 
@@ -1259,7 +1299,7 @@ public IEnumerator PickupFlowCarriesAmmoBothWays()
     var targetObject = target.NetworkObject;
 
     weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
-    weapons.transform.position = target.transform.position + new Vector3(0f, 1f, 1f);
+    Teleport(weapons, target.transform.position + new Vector3(0f, 1f, 1f));
     yield return null;
     yield return null;
 
@@ -1373,7 +1413,10 @@ public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int out
     outgoingReserve = Mathf.Clamp(outgoingReserve, 0, outgoingStats.reserveAmmo);
 
     weapons.SwapSlotServer(slot, target.Archetype, incomingMagazine, incomingReserve);
-    target.NetworkObject.Despawn(true);
+
+    // Runtime drops are destroyed; in-scene pickups use Despawn(false), which is NGO's documented
+    // recommendation for scene-placed network objects.
+    target.NetworkObject.Despawn(target.IsRuntimeDrop);
     SpawnDrop(outgoing, outgoingMagazine, outgoingReserve);
     return true;
 }
@@ -1470,14 +1513,14 @@ public IEnumerator PickupPromptShowsNameAndAction()
     movement.enabled = false;
 
     // Pickups sit near the spawn points, so step away first to prove the prompt is proximity-based.
-    weapons.transform.position = new Vector3(0f, 1f, 30f);
+    Teleport(weapons, new Vector3(0f, 1f, 30f));
     yield return null;
     yield return null;
     Assert.IsFalse(hud.PickupPromptVisible, "No prompt when nothing is close");
 
     var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
     var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
-    weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+    Teleport(weapons, pickup.transform.position + new Vector3(0f, 1f, 1f));
     yield return null;
     yield return null;
 
@@ -1486,7 +1529,7 @@ public IEnumerator PickupPromptShowsNameAndAction()
     Assert.AreEqual(weapons.DefinitionFor(pickup.Archetype).displayName, hud.PickupPromptNameText);
     Assert.AreEqual(pickup.Archetype, hud.PreviewArchetype);
 
-    weapons.transform.position = new Vector3(0f, 1f, 30f);
+    Teleport(weapons, new Vector3(0f, 1f, 30f));
     yield return null;
     yield return null;
     Assert.IsFalse(hud.PickupPromptVisible, "Walking away hides the prompt");
@@ -1565,7 +1608,10 @@ void UpdatePickupPrompt()
     `clearFlags = CameraClearFlags.SolidColor`,
     `backgroundColor = new Color(0f, 0f, 0f, 0f)`, `cullingMask = ~0`,
     `targetTexture = previewTexture`. Create `previewTexture` once as
-    `new RenderTexture(512, 256, 16, RenderTextureFormat.ARGB32)`.
+    `new RenderTexture(512, 256, 16, RenderTextureFormat.ARGB32)`. Store the camera in a
+    `Camera previewCamera` field so it can be idled: `EnsurePreviewRig` sets
+    `previewCamera.enabled = false`, `BuildPreview` sets it `true`, and `ReleasePreview` sets it
+    `false` again, so a hidden prompt never pays for a render.
   - Add a point-light child of the rig at local `(2f, 3f, -3f)`, `range = 8f`, `intensity = 2.5f`.
   - Destroy the previous preview instance, instantiate `definition.viewmodelPrefab` under the rig at
     local zero, rotate it `Quaternion.Euler(10f, 130f, 0f)`, then normalize scale: compute the
