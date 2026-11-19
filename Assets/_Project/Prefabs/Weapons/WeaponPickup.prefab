@@ -1,0 +1,89 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1633383498663217457
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2248454400158549809}
+  - component: {fileID: 8573604202240923575}
+  - component: {fileID: 7511132217243140109}
+  m_Layer: 0
+  m_Name: WeaponPickup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2248454400158549809
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1633383498663217457}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8573604202240923575
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1633383498663217457}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 1847293047
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  m_InScenePlacedDisabledByDefault: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  m_InScenePlaced: 1
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &7511132217243140109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1633383498663217457}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bcf0ae501e90384a88f7487e70dab1a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Weapons.WeaponPickup
+  ShowTopMostFoldoutHeaderGroup: 1
+  initialArchetype: 0
+  entries:
+  - archetype: 0
+    worldPrefab: {fileID: 1733870605739572, guid: 94f75e7c35033314d95e8c12764fa447, type: 3}
+    stats: {fileID: 11400000, guid: b4f95c9b17ceb7f46b40e928f0889b02, type: 2}
+  - archetype: 1
+    worldPrefab: {fileID: 1447866953268326, guid: cc5cce42e1df5aa4f9fdb1e228c80cc2, type: 3}
+    stats: {fileID: 11400000, guid: 5481cf13e9c63b34a9c0f5c8ed2d67c0, type: 2}
+  - archetype: 3
+    worldPrefab: {fileID: 1034931416371988, guid: dbeadb077673e1043814777116334b64, type: 3}
+    stats: {fileID: 11400000, guid: 71bd69ce74c15be4684f2f0c5b04e1e8, type: 2}
+  - archetype: 2
+    worldPrefab: {fileID: 1733870605739572, guid: 94f75e7c35033314d95e8c12764fa447, type: 3}
+    stats: {fileID: 11400000, guid: f644a63b36794784ebd928da2ea75fdc, type: 2}

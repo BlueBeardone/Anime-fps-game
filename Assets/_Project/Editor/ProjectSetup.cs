@@ -10,6 +10,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace AnimeFpsGame.EditorTools
 {
@@ -26,6 +27,7 @@ namespace AnimeFpsGame.EditorTools
         public const string SampleScenePath = ScenesDir + "/SampleScene.unity";
         public const string PlayerPrefabPath = ProjectRoot + "/Prefabs/Player/Player.prefab";
         public const string ViewsDir = ProjectRoot + "/Prefabs/Weapons";
+        public const string PickupPrefabPath = ProjectRoot + "/Prefabs/Weapons/WeaponPickup.prefab";
         public const string StatsDir = ProjectRoot + "/Settings/Weapons";
         public const string ActionsPath = "Assets/InputSystem_Actions.inputactions";
 
@@ -44,6 +46,7 @@ namespace AnimeFpsGame.EditorTools
         [MenuItem("Anime FPS/Run All")]
         public static void RunAll()
         {
+            EnsurePickupPrefab();
             SetupScene();
             BuildPlayerPrefab();
             SetupNetworkManager();
@@ -86,6 +89,7 @@ namespace AnimeFpsGame.EditorTools
             }
 
             EnsureTargetDummies();
+            EnsureWeaponPickups(scene);
 
             EditorSceneManager.SaveScene(scene, MainScenePath);
             if (hasSample)
@@ -505,6 +509,102 @@ namespace AnimeFpsGame.EditorTools
             {
                 property.objectReferenceValue = value;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        static void EnsurePickupPrefab()
+        {
+            EnsureFolder(ProjectRoot + "/Prefabs/Weapons");
+
+            var root = new GameObject("WeaponPickup");
+            root.AddComponent<NetworkObject>();
+            var pickup = root.AddComponent<AnimeFpsGame.Weapons.WeaponPickup>();
+
+            var serialized = new SerializedObject(pickup);
+            serialized.FindProperty("initialArchetype").enumValueIndex = (int)GunArchetype.Rifle;
+
+            var entries = serialized.FindProperty("entries");
+            entries.arraySize = 4;
+
+            // Create the stat assets here, not in BuildPlayerPrefab: RunAll builds this prefab before the
+            // player prefab, and the pickup needs the same magazine/reserve values the player's gun uses.
+            var rifleStats = EnsureGunStatsAsset("Rifle", Rifle.CreateDefaultStats());
+            var handgunStats = EnsureGunStatsAsset("Handgun", Handgun.CreateDefaultStats());
+            var smgStats = EnsureGunStatsAsset("SMG", SubmachineGun.CreateDefaultStats());
+            var shotgunStats = EnsureGunStatsAsset("Shotgun", Shotgun.CreateDefaultStats());
+
+            var rows = new[]
+            {
+                (GunArchetype.Rifle, GunsDir + "/K98_prefab.prefab", rifleStats),
+                (GunArchetype.Handgun, GunsDir + "/LugerP08_prefab.prefab", handgunStats),
+                (GunArchetype.SubmachineGun, GunsDir + "/MP40_prefab.prefab", smgStats),
+                (GunArchetype.Shotgun, GunsDir + "/K98_prefab.prefab", shotgunStats),
+            };
+
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var row = entries.GetArrayElementAtIndex(i);
+                row.FindPropertyRelative("archetype").enumValueIndex = (int)rows[i].Item1;
+                row.FindPropertyRelative("worldPrefab").objectReferenceValue =
+                    AssetDatabase.LoadAssetAtPath<GameObject>(rows[i].Item2);
+                row.FindPropertyRelative("stats").objectReferenceValue = rows[i].Item3;
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            PrefabUtility.SaveAsPrefabAsset(root, PickupPrefabPath);
+            Object.DestroyImmediate(root);
+            AssetDatabase.SaveAssets();
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PickupPrefabPath);
+            var list = AssetDatabase.LoadAssetAtPath<Unity.Netcode.NetworkPrefabsList>(
+                "Assets/DefaultNetworkPrefabs.asset");
+            if (prefab != null && list != null && !list.Contains(prefab))
+            {
+                list.Add(new Unity.Netcode.NetworkPrefab { Prefab = prefab });
+                EditorUtility.SetDirty(list);
+                AssetDatabase.SaveAssets();
+            }
+        }
+
+        static readonly (string Name, GunArchetype Archetype, Vector3 Position)[] PickupSpots =
+        {
+            ("Pickup Rifle", GunArchetype.Rifle, new Vector3(1.5f, 0.2f, -2f)),
+            ("Pickup Handgun", GunArchetype.Handgun, new Vector3(-1.5f, 0.2f, -2f)),
+            ("Pickup SMG", GunArchetype.SubmachineGun, new Vector3(3f, 0.2f, 4f)),
+            ("Pickup Shotgun", GunArchetype.Shotgun, new Vector3(-3f, 0.2f, 4f)),
+        };
+
+        static void EnsureWeaponPickups(Scene scene)
+        {
+            EnsurePickupPrefab();
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PickupPrefabPath);
+            if (prefab == null)
+            {
+                return;
+            }
+
+            foreach (var spot in PickupSpots)
+            {
+                var existing = GameObject.Find(spot.Name);
+                var pickup = existing;
+                if (pickup == null)
+                {
+                    pickup = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
+                    pickup.name = spot.Name;
+                    pickup.transform.position = spot.Position;
+                    pickup.transform.rotation = Quaternion.identity;
+                }
+
+                var component = pickup.GetComponent<AnimeFpsGame.Weapons.WeaponPickup>();
+                if (component == null)
+                {
+                    continue;
+                }
+
+                var serialized = new SerializedObject(component);
+                serialized.FindProperty("initialArchetype").enumValueIndex = (int)spot.Archetype;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(component);
             }
         }
 
