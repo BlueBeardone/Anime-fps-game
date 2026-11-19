@@ -772,6 +772,14 @@ namespace AnimeFpsGame.Weapons
         public override void OnNetworkDespawn()
         {
             Registry.Remove(this);
+
+            // A scene pickup is despawned without being destroyed, so its runtime-built visual would
+            // otherwise stay on the ground as an unpickable ghost.
+            if (visual != null)
+            {
+                Destroy(visual);
+                visual = null;
+            }
         }
 
         void Update()
@@ -1361,22 +1369,24 @@ public bool TryPickup(WeaponPickup target)
         return ApplyPickupServer(target, outgoingMagazine, outgoingReserve);
     }
 
-    TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject),
+    TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject), slot,
         outgoingMagazine, outgoingReserve);
     return true;
 }
 
 [ServerRpc]
-void TryPickupServerRpc(NetworkObjectReference target, int outgoingMagazine, int outgoingReserve)
+void TryPickupServerRpc(NetworkObjectReference target, byte slot, int outgoingMagazine,
+    int outgoingReserve)
 {
     if (target.TryGet(out var networkObject))
     {
         ApplyPickupServer(networkObject.GetComponent<WeaponPickup>(),
-            outgoingMagazine, outgoingReserve);
+            outgoingMagazine, outgoingReserve, slot);
     }
 }
 
-public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int outgoingReserve)
+public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int outgoingReserve,
+    byte? requestSlot = null)
 {
     if (!IsServer || target == null || !target.IsSpawned || weapons == null || weapons.IsDead)
     {
@@ -1394,6 +1404,13 @@ public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int out
     }
 
     var slot = (byte)weapons.CurrentSlot;
+    if (requestSlot.HasValue && requestSlot.Value != slot)
+    {
+        // The player changed slots during the round trip; applying now would swap the wrong slot
+        // and skip the pending ammo restore, refilling the new gun.
+        return false;
+    }
+
     var outgoing = weapons.CarriedArchetype(slot);
     if (outgoing == target.Archetype)
     {
@@ -1610,8 +1627,10 @@ void UpdatePickupPrompt()
     `targetTexture = previewTexture`. Create `previewTexture` once as
     `new RenderTexture(512, 256, 16, RenderTextureFormat.ARGB32)`. Store the camera in a
     `Camera previewCamera` field so it can be idled: `EnsurePreviewRig` sets
-    `previewCamera.enabled = false`, `BuildPreview` sets it `true`, and `ReleasePreview` sets it
-    `false` again, so a hidden prompt never pays for a render.
+    `previewCamera.enabled = false`, `BuildPreview` sets it `true` and starts a coroutine that
+    disables it on the next frame (`yield return null`; `WaitForEndOfFrame` never resumes in the
+    headless PlayMode runner), and `ReleasePreview` sets it `false` again. That renders exactly one
+    frame per archetype change instead of a full-scene render every frame.
   - Add a point-light child of the rig at local `(2f, 3f, -3f)`, `range = 8f`, `intensity = 2.5f`.
   - Destroy the previous preview instance, instantiate `definition.viewmodelPrefab` under the rig at
     local zero, rotate it `Quaternion.Euler(10f, 130f, 0f)`, then normalize scale: compute the
