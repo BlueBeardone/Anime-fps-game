@@ -1,4 +1,5 @@
 using AnimeFpsGame.Player;
+using AnimeFpsGame.Weapons;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,14 +15,36 @@ namespace AnimeFpsGame.UI
         const float MaxGap = 48f;
         const float BarThickness = 2f;
         const float BarLength = 14f;
+        const string PickupActionLabel = "Press F to switch";
+        const float PreviewLongestAxis = 1.2f;
 
         PlayerWeapons weapons;
+        PlayerPickupInteractor pickupInteractor;
         GameObject canvasRoot;
         Image[] bars;
         Text ammoText;
         Text reloadLabel;
         Image reloadBar;
         bool built;
+
+        GameObject pickupPrompt;
+        RawImage pickupPreview;
+        Text pickupName;
+        Text pickupAction;
+
+        GameObject previewRig;
+        GameObject previewInstance;
+        RenderTexture previewTexture;
+        GunArchetype? previewArchetype;
+
+        /// <summary>True while the pickup panel is actually on screen (false on death).</summary>
+        public bool PickupPromptVisible => pickupPrompt != null && pickupPrompt.activeInHierarchy;
+
+        public string PickupPromptActionText => pickupAction != null ? pickupAction.text : null;
+
+        public string PickupPromptNameText => pickupName != null ? pickupName.text : null;
+
+        public GunArchetype? PreviewArchetype => previewArchetype;
 
         /// <summary>Maps degrees of spread onto the crosshair gap in pixels.</summary>
         public static float ComputeCrosshairGap(float spread, float maxSpread)
@@ -44,6 +67,11 @@ namespace AnimeFpsGame.UI
             if (weapons == null)
             {
                 return;
+            }
+
+            if (pickupInteractor == null)
+            {
+                pickupInteractor = GetComponent<PlayerPickupInteractor>();
             }
 
             if (weapons.IsSpawned && !weapons.IsOwner)
@@ -72,6 +100,8 @@ namespace AnimeFpsGame.UI
             {
                 canvasRoot.SetActive(true);
             }
+
+            UpdatePickupPrompt();
 
             var gun = weapons.ActiveGun;
             if (gun == null)
@@ -156,8 +186,231 @@ namespace AnimeFpsGame.UI
             fillRect.offsetMin = Vector2.zero;
             fillRect.offsetMax = Vector2.zero;
 
+            BuildPickupPrompt(font);
+
             built = true;
             SetGap(MinGap);
+        }
+
+        void BuildPickupPrompt(Font font)
+        {
+            var panel = CreateImage("PickupPrompt", canvasRoot.transform,
+                new Color(0f, 0f, 0f, 0.45f));
+            var panelRect = panel.rectTransform;
+            panelRect.anchorMin = new Vector2(0.5f, 0f);
+            panelRect.anchorMax = new Vector2(0.5f, 0f);
+            panelRect.pivot = new Vector2(0.5f, 0f);
+            panelRect.anchoredPosition = new Vector2(0f, 200f);
+            panelRect.sizeDelta = new Vector2(280f, 190f);
+            pickupPrompt = panel.gameObject;
+
+            var previewObject = new GameObject("PickupPreview");
+            previewObject.transform.SetParent(pickupPrompt.transform, false);
+            pickupPreview = previewObject.AddComponent<RawImage>();
+            pickupPreview.raycastTarget = false;
+            var previewRect = pickupPreview.rectTransform;
+            previewRect.anchorMin = new Vector2(0.5f, 0.5f);
+            previewRect.anchorMax = new Vector2(0.5f, 0.5f);
+            previewRect.pivot = new Vector2(0.5f, 0.5f);
+            previewRect.anchoredPosition = new Vector2(0f, 38f);
+            previewRect.sizeDelta = new Vector2(220f, 110f);
+
+            pickupName = CreateText("PickupName", pickupPrompt.transform, font, 18);
+            var nameRect = pickupName.rectTransform;
+            nameRect.anchorMin = new Vector2(0.5f, 0.5f);
+            nameRect.anchorMax = new Vector2(0.5f, 0.5f);
+            nameRect.pivot = new Vector2(0.5f, 0.5f);
+            nameRect.anchoredPosition = new Vector2(0f, -24f);
+            nameRect.sizeDelta = new Vector2(260f, 24f);
+            pickupName.alignment = TextAnchor.MiddleCenter;
+
+            pickupAction = CreateText("PickupAction", pickupPrompt.transform, font, 20);
+            var actionRect = pickupAction.rectTransform;
+            actionRect.anchorMin = new Vector2(0.5f, 0.5f);
+            actionRect.anchorMax = new Vector2(0.5f, 0.5f);
+            actionRect.pivot = new Vector2(0.5f, 0.5f);
+            actionRect.anchoredPosition = new Vector2(0f, -52f);
+            actionRect.sizeDelta = new Vector2(260f, 24f);
+            pickupAction.alignment = TextAnchor.MiddleCenter;
+            pickupAction.text = PickupActionLabel;
+
+            pickupPrompt.SetActive(false);
+        }
+
+        void UpdatePickupPrompt()
+        {
+            var target = pickupInteractor != null ? pickupInteractor.NearestPickup : null;
+            var visible = target != null && !weapons.IsDead;
+            pickupPrompt.SetActive(visible);
+
+            if (!visible)
+            {
+                ReleasePreview();
+                return;
+            }
+
+            var definition = weapons.DefinitionFor(target.Archetype);
+            var name = definition != null ? definition.displayName : target.Archetype.ToString();
+            if (pickupName.text != name)
+            {
+                pickupName.text = name;
+            }
+
+            if (pickupAction.text != PickupActionLabel)
+            {
+                pickupAction.text = PickupActionLabel;
+            }
+
+            if (previewArchetype != target.Archetype)
+            {
+                BuildPreview(target.Archetype, definition);
+            }
+        }
+
+        void BuildPreview(GunArchetype archetype, WeaponDefinition definition)
+        {
+            EnsurePreviewRig();
+
+            if (previewInstance != null)
+            {
+                previewInstance.SetActive(false);
+                previewInstance.transform.SetParent(null, true);
+                Destroy(previewInstance);
+                previewInstance = null;
+            }
+
+            previewArchetype = archetype;
+            pickupPreview.texture = previewTexture;
+
+            if (definition == null || definition.viewmodelPrefab == null)
+            {
+                return;
+            }
+
+            previewInstance = Instantiate(definition.viewmodelPrefab, previewRig.transform, false);
+            previewInstance.name = "PickupPreviewInstance";
+            previewInstance.transform.localPosition = Vector3.zero;
+            previewInstance.transform.localRotation = Quaternion.Euler(10f, 130f, 0f);
+            previewInstance.transform.localScale = Vector3.one;
+
+            if (TryGetRendererBounds(previewInstance, out var initialBounds))
+            {
+                var size = initialBounds.size;
+                var longest = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+                if (longest > 0.0001f)
+                {
+                    previewInstance.transform.localScale *= PreviewLongestAxis / longest;
+                }
+
+                if (TryGetRendererBounds(previewInstance, out var scaledBounds))
+                {
+                    var localCentre = previewRig.transform.InverseTransformPoint(scaledBounds.center);
+                    previewInstance.transform.localPosition = -localCentre;
+                }
+            }
+        }
+
+        void EnsurePreviewRig()
+        {
+            if (previewRig != null)
+            {
+                return;
+            }
+
+            if (previewTexture == null)
+            {
+                previewTexture = new RenderTexture(512, 256, 16, RenderTextureFormat.ARGB32);
+            }
+
+            previewRig = new GameObject("PickupPreviewRig");
+            previewRig.transform.SetParent(transform, false);
+            previewRig.transform.localPosition = new Vector3(0f, -1000f, 0f);
+            previewRig.transform.localRotation = Quaternion.identity;
+
+            var cameraObject = new GameObject("PickupPreviewCamera");
+            cameraObject.transform.SetParent(previewRig.transform, false);
+            cameraObject.transform.localPosition = new Vector3(0f, 0f, -2.4f);
+            cameraObject.transform.localRotation = Quaternion.identity;
+            var previewCamera = cameraObject.AddComponent<Camera>();
+            previewCamera.orthographic = true;
+            previewCamera.orthographicSize = 0.75f;
+            previewCamera.clearFlags = CameraClearFlags.SolidColor;
+            previewCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            previewCamera.cullingMask = ~0;
+            previewCamera.targetTexture = previewTexture;
+
+            var lightObject = new GameObject("PickupPreviewLight");
+            lightObject.transform.SetParent(previewRig.transform, false);
+            lightObject.transform.localPosition = new Vector3(2f, 3f, -3f);
+            var previewLight = lightObject.AddComponent<Light>();
+            previewLight.type = LightType.Point;
+            previewLight.range = 8f;
+            previewLight.intensity = 2.5f;
+        }
+
+        static bool TryGetRendererBounds(GameObject root, out Bounds bounds)
+        {
+            bounds = new Bounds();
+            var found = false;
+
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                if (!found)
+                {
+                    bounds = renderer.bounds;
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            return found;
+        }
+
+        void ReleasePreview()
+        {
+            if (previewInstance != null)
+            {
+                previewInstance.SetActive(false);
+                previewInstance.transform.SetParent(null, true);
+                Destroy(previewInstance);
+                previewInstance = null;
+            }
+
+            previewArchetype = null;
+            if (pickupPreview != null)
+            {
+                pickupPreview.texture = null;
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (previewInstance != null)
+            {
+                Destroy(previewInstance);
+                previewInstance = null;
+            }
+
+            if (previewRig != null)
+            {
+                Destroy(previewRig);
+                previewRig = null;
+            }
+
+            if (previewTexture != null)
+            {
+                previewTexture.Release();
+                Destroy(previewTexture);
+                previewTexture = null;
+            }
         }
 
         Image CreateBar(string name, Vector2 size)

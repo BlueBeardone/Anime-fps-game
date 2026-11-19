@@ -1,6 +1,8 @@
 using System.Collections;
+using System.Linq;
 using AnimeFpsGame.Player;
 using AnimeFpsGame.UI;
+using AnimeFpsGame.Weapons;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -36,6 +38,48 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(weapons);
             Assert.IsNotNull(weapons.GetComponent<WeaponHud>());
             Assert.IsNotNull(weapons.GetComponent<AnimeFpsGame.Effects.ShotEffects>());
+        }
+
+        [UnityTest]
+        public IEnumerator PickupPromptShowsNameAndAction()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            var hud = weapons.GetComponent<WeaponHud>();
+            var movement = weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>();
+            movement.enabled = false;
+
+            // Pickups sit near the spawn points, so step away first to prove the prompt is proximity-based.
+            weapons.transform.position = new Vector3(0f, 1f, 30f);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(hud.PickupPromptVisible, "No prompt when nothing is close");
+
+            var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
+            var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
+            weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(hud.PickupPromptVisible);
+            Assert.AreEqual("Press F to switch", hud.PickupPromptActionText);
+            Assert.AreEqual(weapons.DefinitionFor(pickup.Archetype).displayName, hud.PickupPromptNameText);
+            Assert.AreEqual(pickup.Archetype, hud.PreviewArchetype);
+
+            weapons.transform.position = new Vector3(0f, 1f, 30f);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(hud.PickupPromptVisible, "Walking away hides the prompt");
         }
 
         [UnityTearDown]
