@@ -100,6 +100,11 @@ namespace AnimeFpsGame.Weapons
         public override void OnNetworkDespawn()
         {
             Registry.Remove(this);
+            if (visual != null)
+            {
+                Destroy(visual);
+                visual = null;
+            }
         }
 
         void Update()

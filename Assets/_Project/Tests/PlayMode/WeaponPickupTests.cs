@@ -164,6 +164,11 @@ namespace AnimeFpsGame.Tests
             yield return null;
             yield return null;
 
+            var otherSlot = (byte)((slot + 1) % weapons.SlotCount);
+            Assert.IsFalse(interactor.ApplyPickupServer(target, outgoingMagazine, outgoingReserve, otherSlot),
+                "A request from a slot the player no longer holds must be rejected");
+            Assert.IsTrue(target.IsSpawned, "A rejected request must not consume the ground gun");
+
             Assert.IsTrue(interactor.TryPickup(target), "Host pickup must apply immediately");
             yield return null;
 
@@ -171,6 +176,8 @@ namespace AnimeFpsGame.Tests
             Assert.AreEqual(incomingMagazine, weapons.ActiveGun.AmmoInMagazine);
             Assert.AreEqual(incomingReserve, weapons.ActiveGun.ReserveAmmo);
             Assert.IsFalse(targetObject.IsSpawned, "The consumed ground gun despawns for everyone");
+            Assert.IsNull(targetObject.transform.Find("Visual"),
+                "A consumed pickup must not leave a visible gun behind");
 
             var drop = WeaponPickup.All.FirstOrDefault(p => p.IsRuntimeDrop && p.Archetype == held);
             Assert.IsNotNull(drop, "The old gun must drop at the player's feet");

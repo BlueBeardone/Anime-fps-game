@@ -1,3 +1,4 @@
+using System.Collections;
 using AnimeFpsGame.Player;
 using AnimeFpsGame.Weapons;
 using UnityEngine;
@@ -46,6 +47,8 @@ namespace AnimeFpsGame.UI
         public string PickupPromptNameText => pickupName != null ? pickupName.text : null;
 
         public GunArchetype? PreviewArchetype => previewArchetype;
+
+        public bool PreviewCameraEnabled => previewCamera != null && previewCamera.enabled;
 
         /// <summary>Maps degrees of spread onto the crosshair gap in pixels.</summary>
         public static float ComputeCrosshairGap(float spread, float maxSpread)
@@ -272,6 +275,7 @@ namespace AnimeFpsGame.UI
         {
             EnsurePreviewRig();
             previewCamera.enabled = true;
+            StartCoroutine(DisablePreviewCameraAfterFrame());
 
             if (previewInstance != null)
             {
@@ -309,6 +313,15 @@ namespace AnimeFpsGame.UI
                     var localCentre = previewRig.transform.InverseTransformPoint(scaledBounds.center);
                     previewInstance.transform.localPosition = -localCentre;
                 }
+            }
+        }
+
+        IEnumerator DisablePreviewCameraAfterFrame()
+        {
+            yield return null;
+            if (previewCamera != null)
+            {
+                previewCamera.enabled = false;
             }
         }
 

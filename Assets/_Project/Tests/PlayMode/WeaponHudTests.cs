@@ -75,6 +75,10 @@ namespace AnimeFpsGame.Tests
             Assert.AreEqual("Press F to switch", hud.PickupPromptActionText);
             Assert.AreEqual(weapons.DefinitionFor(pickup.Archetype).displayName, hud.PickupPromptNameText);
             Assert.AreEqual(pickup.Archetype, hud.PreviewArchetype);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(hud.PreviewCameraEnabled,
+                "The preview must render once per nearby gun, not every frame");
 
             Teleport(weapons, new Vector3(0f, 1f, 30f));
             yield return null;

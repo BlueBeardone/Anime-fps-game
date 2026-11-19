@@ -132,21 +132,22 @@ namespace AnimeFpsGame.Weapons
 
             if (IsServer)
             {
-                return ApplyPickupServer(target, outgoingMagazine, outgoingReserve);
+                return ApplyPickupServer(target, outgoingMagazine, outgoingReserve, slot);
             }
 
-            TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject),
+            TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject), slot,
                 outgoingMagazine, outgoingReserve);
             return true;
         }
 
         [ServerRpc]
-        void TryPickupServerRpc(NetworkObjectReference target, int outgoingMagazine, int outgoingReserve)
+        void TryPickupServerRpc(NetworkObjectReference target, byte slot, int outgoingMagazine,
+            int outgoingReserve)
         {
             if (target.TryGet(out var networkObject))
             {
                 ApplyPickupServer(networkObject.GetComponent<WeaponPickup>(),
-                    outgoingMagazine, outgoingReserve);
+                    outgoingMagazine, outgoingReserve, slot);
             }
         }
 
@@ -154,7 +155,8 @@ namespace AnimeFpsGame.Weapons
         /// Re-checks everything the client reported before swapping: cooldown, range, the held
         /// archetype and the outgoing gun's ammo caps. The client never decides what it gets.
         /// </summary>
-        public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int outgoingReserve)
+        public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int outgoingReserve,
+            byte? requestSlot = null)
         {
             if (!IsServer || target == null || !target.IsSpawned || weapons == null || weapons.IsDead)
             {
@@ -172,6 +174,11 @@ namespace AnimeFpsGame.Weapons
             }
 
             var slot = (byte)weapons.CurrentSlot;
+            if (requestSlot.HasValue && requestSlot.Value != slot)
+            {
+                return false;
+            }
+
             var outgoing = weapons.CarriedArchetype(slot);
             if (outgoing == target.Archetype)
             {
