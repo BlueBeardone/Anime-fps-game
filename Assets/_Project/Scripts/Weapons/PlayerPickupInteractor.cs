@@ -109,6 +109,127 @@ namespace AnimeFpsGame.Weapons
             {
                 NearestPickup = pickups[index];
             }
+
+            if (input != null && input.PickupPressed && NearestPickup != null)
+            {
+                TryPickup(NearestPickup);
+            }
+        }
+
+        /// <summary>Owner entry point; the host applies at once, a client asks the server.</summary>
+        public bool TryPickup(WeaponPickup target)
+        {
+            if (!IsOwner || target == null || weapons == null || weapons.IsDead || weapons.ActiveGun == null)
+            {
+                return false;
+            }
+
+            var slot = (byte)weapons.CurrentSlot;
+            weapons.SetPendingPickupAmmo(slot, target.Archetype, target.MagazineAmmo, target.ReserveAmmo);
+
+            var outgoingMagazine = weapons.ActiveGun.AmmoInMagazine;
+            var outgoingReserve = weapons.ActiveGun.ReserveAmmo;
+
+            if (IsServer)
+            {
+                return ApplyPickupServer(target, outgoingMagazine, outgoingReserve);
+            }
+
+            TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject),
+                outgoingMagazine, outgoingReserve);
+            return true;
+        }
+
+        [ServerRpc]
+        void TryPickupServerRpc(NetworkObjectReference target, int outgoingMagazine, int outgoingReserve)
+        {
+            if (target.TryGet(out var networkObject))
+            {
+                ApplyPickupServer(networkObject.GetComponent<WeaponPickup>(),
+                    outgoingMagazine, outgoingReserve);
+            }
+        }
+
+        /// <summary>
+        /// Re-checks everything the client reported before swapping: cooldown, range, the held
+        /// archetype and the outgoing gun's ammo caps. The client never decides what it gets.
+        /// </summary>
+        public bool ApplyPickupServer(WeaponPickup target, int outgoingMagazine, int outgoingReserve)
+        {
+            if (!IsServer || target == null || !target.IsSpawned || weapons == null || weapons.IsDead)
+            {
+                return false;
+            }
+
+            if (target.IsInDropCooldown)
+            {
+                return false;
+            }
+
+            if (Vector3.Distance(transform.position, target.transform.position) > pickupRadius + 0.5f)
+            {
+                return false;
+            }
+
+            var slot = (byte)weapons.CurrentSlot;
+            var outgoing = weapons.CarriedArchetype(slot);
+            if (outgoing == target.Archetype)
+            {
+                return false;
+            }
+
+            var incomingMagazine = target.MagazineAmmo;
+            var incomingReserve = target.ReserveAmmo;
+            var outgoingDefinition = weapons.DefinitionFor(outgoing);
+            var outgoingStats = outgoingDefinition?.stats?.stats;
+            if (outgoingStats == null)
+            {
+                return false;
+            }
+
+            outgoingMagazine = Mathf.Clamp(outgoingMagazine, 0, outgoingStats.magazineSize);
+            outgoingReserve = Mathf.Clamp(outgoingReserve, 0, outgoingStats.reserveAmmo);
+
+            weapons.SwapSlotServer(slot, target.Archetype, incomingMagazine, incomingReserve);
+            target.NetworkObject.Despawn(true);
+            SpawnDrop(outgoing, outgoingMagazine, outgoingReserve);
+            return true;
+        }
+
+        void SpawnDrop(GunArchetype archetype, int magazine, int reserve)
+        {
+            if (pickupPrefab == null)
+            {
+                return;
+            }
+
+            // Keep repeated swaps from filling the range forever.
+            var drops = new List<WeaponPickup>();
+            foreach (var pickup in WeaponPickup.All)
+            {
+                if (pickup.IsRuntimeDrop && pickup.IsSpawned)
+                {
+                    drops.Add(pickup);
+                }
+            }
+
+            if (drops.Count >= 12)
+            {
+                drops.Sort((a, b) => a.SpawnedAt.CompareTo(b.SpawnedAt));
+                drops[0].NetworkObject.Despawn(true);
+            }
+
+            var forward = transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+
+            var drop = Instantiate(pickupPrefab, transform.position + forward.normalized * 0.75f,
+                Quaternion.identity);
+            drop.Initialize(archetype, magazine, reserve);
+            drop.NetworkObject.Spawn();
         }
     }
 }

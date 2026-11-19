@@ -127,5 +127,58 @@ namespace AnimeFpsGame.Tests
             Assert.AreSame(pickup, interactor.NearestPickup);
             Assert.AreEqual(pickup.Archetype, interactor.NearestArchetype);
         }
+
+        [UnityTest]
+        public IEnumerator PickupFlowCarriesAmmoBothWays()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            var interactor = weapons.GetComponent<PlayerPickupInteractor>();
+            var slot = (byte)weapons.CurrentSlot;
+            var held = weapons.CarriedArchetype(slot);
+            var target = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held && !p.IsRuntimeDrop);
+
+            // Spend two rounds so the drop must carry less than a full magazine.
+            var gun = weapons.ActiveGun;
+            gun.TryFire(Vector3.zero, Vector3.forward, 0f, true, true, out _);
+            gun.TryFire(Vector3.zero, Vector3.forward, 10f, true, true, out _);
+            var outgoingMagazine = gun.AmmoInMagazine;
+            var outgoingReserve = gun.ReserveAmmo;
+            var incomingMagazine = target.MagazineAmmo;
+            var incomingReserve = target.ReserveAmmo;
+            var incomingArchetype = target.Archetype;
+            var targetObject = target.NetworkObject;
+
+            weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
+            weapons.transform.position = target.transform.position + new Vector3(0f, 1f, 1f);
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(interactor.TryPickup(target), "Host pickup must apply immediately");
+            yield return null;
+
+            Assert.AreEqual(incomingArchetype, weapons.CarriedArchetype(slot));
+            Assert.AreEqual(incomingMagazine, weapons.ActiveGun.AmmoInMagazine);
+            Assert.AreEqual(incomingReserve, weapons.ActiveGun.ReserveAmmo);
+            Assert.IsFalse(targetObject.IsSpawned, "The consumed ground gun despawns for everyone");
+
+            var drop = WeaponPickup.All.FirstOrDefault(p => p.IsRuntimeDrop && p.Archetype == held);
+            Assert.IsNotNull(drop, "The old gun must drop at the player's feet");
+            Assert.AreEqual(outgoingMagazine, drop.MagazineAmmo);
+            Assert.AreEqual(outgoingReserve, drop.ReserveAmmo);
+            Assert.IsTrue(drop.IsInDropCooldown, "A fresh drop must not be instantly re-grabbable");
+            Assert.IsFalse(interactor.ApplyPickupServer(drop, 0, 0),
+                "A pickup in cooldown must reject a second request");
+        }
     }
 }
