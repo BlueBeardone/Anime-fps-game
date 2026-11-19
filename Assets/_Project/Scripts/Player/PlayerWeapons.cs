@@ -38,6 +38,14 @@ namespace AnimeFpsGame.Player
         readonly NetworkVariable<byte> activeSlot = new(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        readonly NetworkList<byte> carriedArchetypes = new();
+
+        byte pendingSwapSlot;
+        GunArchetype pendingSwapArchetype;
+        int pendingSwapMagazine;
+        int pendingSwapReserve;
+        bool hasPendingSwap;
+
         IGun[] guns;
         IGun boundGun;
         PlayerLook playerLook;
@@ -96,6 +104,15 @@ namespace AnimeFpsGame.Player
         public override void OnNetworkSpawn()
         {
             activeSlot.OnValueChanged += OnSlotChanged;
+            carriedArchetypes.OnListChanged += OnCarriedArchetypesChanged;
+            if (IsServer && slots != null && carriedArchetypes.Count != slots.Length)
+            {
+                carriedArchetypes.Clear();
+                for (var i = 0; i < slots.Length; i++)
+                {
+                    carriedArchetypes.Add((byte)slots[i].stats.stats.archetype);
+                }
+            }
 
             if (health != null)
             {
@@ -117,6 +134,7 @@ namespace AnimeFpsGame.Player
         public override void OnNetworkDespawn()
         {
             activeSlot.OnValueChanged -= OnSlotChanged;
+            carriedArchetypes.OnListChanged -= OnCarriedArchetypesChanged;
 
             if (health != null)
             {
@@ -187,6 +205,67 @@ namespace AnimeFpsGame.Player
             {
                 gun?.ResetAmmo();
             }
+        }
+
+        public WeaponDefinition DefinitionFor(GunArchetype archetype)
+        {
+            if (slots == null)
+            {
+                return null;
+            }
+
+            foreach (var slot in slots)
+            {
+                if (slot?.stats?.stats != null && slot.stats.stats.archetype == archetype)
+                {
+                    return slot;
+                }
+            }
+
+            return null;
+        }
+
+        public GunArchetype CarriedArchetype(byte slot)
+        {
+            if (slots == null || slots.Length == 0)
+            {
+                return GunArchetype.Rifle;
+            }
+
+            var index = Mathf.Clamp(slot, 0, slots.Length - 1);
+            if (carriedArchetypes.Count > index)
+            {
+                return (GunArchetype)carriedArchetypes[index];
+            }
+
+            return slots[index].stats.stats.archetype;
+        }
+
+        public void SetPendingPickupAmmo(byte slot, GunArchetype archetype, int magazine, int reserve)
+        {
+            pendingSwapSlot = slot;
+            pendingSwapArchetype = archetype;
+            pendingSwapMagazine = magazine;
+            pendingSwapReserve = reserve;
+            hasPendingSwap = true;
+        }
+
+        public GunArchetype SwapSlotServer(byte slot, GunArchetype incoming, int magazine, int reserve)
+        {
+            if (!IsServer || slots == null || carriedArchetypes.Count <= slot)
+            {
+                return CarriedArchetype(slot);
+            }
+
+            var outgoing = CarriedArchetype(slot);
+            if (outgoing == incoming)
+            {
+                return outgoing;
+            }
+
+            SetPendingPickupAmmo(slot, incoming, magazine, reserve);
+            carriedArchetypes[slot] = (byte)incoming;
+            return outgoing;
         }
 
         void BuildGuns()
@@ -497,7 +576,12 @@ namespace AnimeFpsGame.Player
 
             if (slots != null && slots.Length > 0)
             {
-                ApplyVisibleWeaponMeshes(slots[Mathf.Clamp(CurrentSlot, 0, slots.Length - 1)]);
+                var definition = DefinitionFor(
+                    CarriedArchetype((byte)Mathf.Clamp(CurrentSlot, 0, slots.Length - 1)));
+                if (definition != null)
+                {
+                    ApplyVisibleWeaponMeshes(definition);
+                }
             }
 
             if (IsOwner && currentViewmodel != null)
@@ -533,6 +617,52 @@ namespace AnimeFpsGame.Player
                 viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01 - 8f * bolt01, 0f, 0f));
         }
 
+        void OnCarriedArchetypesChanged(NetworkListEvent<byte> change)
+        {
+            // Initial sync arrives as Add events. Guns were already built from the serialized catalog;
+            // only a real slot change should rebuild one.
+            if (change.Type != NetworkListEvent<byte>.EventType.Value)
+            {
+                return;
+            }
+
+            var index = change.Index;
+            if (guns == null || index < 0 || index >= guns.Length)
+            {
+                return;
+            }
+
+            RebuildSlotGun(index);
+            if (index == CurrentSlot)
+            {
+                ApplySlot((byte)index);
+            }
+        }
+
+        void RebuildSlotGun(int index)
+        {
+            var archetype = (GunArchetype)carriedArchetypes[index];
+            var definition = DefinitionFor(archetype);
+            var stats = definition?.stats?.stats;
+            if (stats == null)
+            {
+                return;
+            }
+
+            var gun = GunFactory.Create(stats);
+            if (hasPendingSwap && pendingSwapSlot == index && pendingSwapArchetype == archetype)
+            {
+                gun.RestoreAmmo(pendingSwapMagazine, pendingSwapReserve);
+                hasPendingSwap = false;
+            }
+
+            guns[index] = gun;
+            if (IsOwner && index == CurrentSlot)
+            {
+                BindActiveGun();
+            }
+        }
+
         void OnSlotChanged(byte previous, byte current)
         {
             if (guns != null && previous < guns.Length)
@@ -550,7 +680,11 @@ namespace AnimeFpsGame.Player
                 return;
             }
 
-            var definition = slots[Mathf.Clamp(slot, 0, slots.Length - 1)];
+            var definition = DefinitionFor(CarriedArchetype(slot));
+            if (definition == null)
+            {
+                definition = slots[Mathf.Clamp(slot, 0, slots.Length - 1)];
+            }
 
             if (currentViewmodel != null)
             {

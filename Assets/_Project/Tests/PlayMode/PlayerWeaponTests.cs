@@ -340,5 +340,45 @@ namespace AnimeFpsGame.Tests
             Assert.Less(toMuzzle.magnitude, 3f,
                 "The muzzle must be on the held gun, not across the map");
         }
+
+        [UnityTest]
+        public IEnumerator SwapSlotServerChangesOwnerAndServerStats()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons);
+            var slot = (byte)weapons.CurrentSlot;
+            Assert.AreEqual(GunArchetype.Rifle, weapons.CarriedArchetype(slot));
+            Assert.IsNotNull(weapons.DefinitionFor(GunArchetype.Handgun));
+
+            var outgoing = weapons.SwapSlotServer(slot, GunArchetype.Handgun, 5, 7);
+            yield return null;
+
+            Assert.AreEqual(GunArchetype.Rifle, outgoing);
+            Assert.AreEqual(GunArchetype.Handgun, weapons.CarriedArchetype(slot));
+            Assert.AreEqual(GunArchetype.Handgun, weapons.ActiveGun.Stats.archetype,
+                "Server stats must follow the swap or remote shot validation breaks");
+            Assert.AreEqual(5, weapons.ActiveGun.AmmoInMagazine);
+            Assert.AreEqual(7, weapons.ActiveGun.ReserveAmmo);
+            Assert.AreEqual(GunArchetype.Handgun, weapons.DefinitionFor(weapons.CarriedArchetype(slot))
+                .stats.stats.archetype);
+
+            weapons.SwapSlotServer(slot, GunArchetype.Rifle, 3, 12);
+            yield return null;
+
+            Assert.AreEqual(GunArchetype.Rifle, weapons.CarriedArchetype(slot));
+            Assert.AreEqual(3, weapons.ActiveGun.AmmoInMagazine);
+            Assert.AreEqual(12, weapons.ActiveGun.ReserveAmmo);
+        }
     }
 }
