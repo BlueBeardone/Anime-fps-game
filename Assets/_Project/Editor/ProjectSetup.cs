@@ -279,7 +279,7 @@ namespace AnimeFpsGame.EditorTools
             var handgunStats = EnsureGunStatsAsset("Handgun", Handgun.CreateDefaultStats());
             var smgStats = EnsureGunStatsAsset("SMG", SubmachineGun.CreateDefaultStats());
             var shotgunStats = EnsureGunStatsAsset("Shotgun", Shotgun.CreateDefaultStats());
-            EnsureReloadAction();
+            EnsurePlayerActions();
 
             var root = new GameObject("Player");
             var playerLayer = EnsureLayer("Player");
@@ -444,7 +444,7 @@ namespace AnimeFpsGame.EditorTools
             return asset;
         }
 
-        static void EnsureReloadAction()
+        static void EnsurePlayerActions()
         {
             var asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(ActionsPath);
             if (asset == null)
@@ -454,7 +454,7 @@ namespace AnimeFpsGame.EditorTools
             }
 
             var map = asset.FindActionMap("Player", false);
-            if (map == null || map.FindAction("Reload", false) != null)
+            if (map == null)
             {
                 return;
             }
@@ -462,12 +462,36 @@ namespace AnimeFpsGame.EditorTools
             // PlayerInput components can leave the imported asset enabled while the scene is open.
             var wasEnabled = asset.enabled;
             asset.Disable();
-            var action = map.AddAction("Reload", InputActionType.Button);
-            action.AddBinding("<Keyboard>/r");
-            action.AddBinding("<Gamepad>/dpad/down");
-            EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
-            if (wasEnabled)
+            var changed = false;
+
+            if (map.FindAction("Reload", false) == null)
+            {
+                var reload = map.AddAction("Reload", InputActionType.Button);
+                reload.AddBinding("<Keyboard>/r");
+                reload.AddBinding("<Gamepad>/dpad/down");
+                changed = true;
+            }
+
+            if (map.FindAction("Pickup", false) == null)
+            {
+                var pickup = map.AddAction("Pickup", InputActionType.Button);
+                pickup.AddBinding("<Keyboard>/f");
+                pickup.AddBinding("<Gamepad>/buttonNorth");
+                changed = true;
+            }
+
+            if (changed)
+            {
+                // The .inputactions file is a ScriptedImporter source asset, so AssetDatabase.SaveAssets
+                // alone does not rewrite its JSON. Serialize explicitly, then reimport so the newly
+                // loaded instance reflects the added actions.
+                EditorUtility.SetDirty(asset);
+                File.WriteAllText(ActionsPath, asset.ToJson());
+                AssetDatabase.ImportAsset(ActionsPath, ImportAssetOptions.ForceUpdate);
+                asset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(ActionsPath);
+            }
+
+            if (wasEnabled && asset != null)
             {
                 asset.Enable();
             }

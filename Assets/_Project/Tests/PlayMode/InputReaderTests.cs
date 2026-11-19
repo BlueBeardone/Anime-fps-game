@@ -74,5 +74,38 @@ namespace AnimeFpsGame.Tests
             Assert.IsFalse(reader.CyclePreviousPressed);
             Assert.AreEqual(0f, reader.ScrollY, 0.001f);
         }
+
+        [UnityTest]
+        public IEnumerator SpawnedPlayerHasPickupActionBoundToF()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 10f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            Assert.IsNotNull(weapons);
+            var actions = weapons.GetComponent<PlayerInput>().actions;
+            var pickup = actions.FindAction("Pickup");
+            Assert.IsNotNull(pickup, "Pickup action must exist on the Player map");
+
+            var boundToF = false;
+            foreach (var binding in pickup.bindings)
+            {
+                if (binding.effectivePath == "<Keyboard>/f")
+                {
+                    boundToF = true;
+                }
+            }
+
+            Assert.IsTrue(boundToF, "Pickup must be bound to F");
+            Assert.IsFalse(weapons.GetComponent<InputReader>().PickupPressed);
+        }
     }
 }

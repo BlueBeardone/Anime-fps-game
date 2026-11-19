@@ -18,6 +18,7 @@ namespace AnimeFpsGame.Input
         InputAction jump;
         InputAction attack;
         InputAction reload;
+        InputAction pickup;
         InputAction next;
         InputAction previous;
 
@@ -29,6 +30,7 @@ namespace AnimeFpsGame.Input
         public bool AttackPressed => attack != null && attack.WasPressedThisFrame();
         public bool AttackHeld => attack != null && attack.IsPressed();
         public bool ReloadPressed => reload != null && reload.WasPressedThisFrame();
+        public bool PickupPressed => pickup != null && pickup.WasPressedThisFrame();
         public bool CycleNextPressed => next != null && next.WasPressedThisFrame();
         public bool CyclePreviousPressed => previous != null && previous.WasPressedThisFrame();
         public float ScrollY => Mouse.current != null ? Mouse.current.scroll.ReadValue().y : 0f;
@@ -50,6 +52,7 @@ namespace AnimeFpsGame.Input
             jump = actions.FindAction("Jump");
             attack = actions.FindAction("Attack");
             reload = actions.FindAction("Reload");
+            pickup = actions.FindAction("Pickup");
             next = actions.FindAction("Next");
             previous = actions.FindAction("Previous");
         }
