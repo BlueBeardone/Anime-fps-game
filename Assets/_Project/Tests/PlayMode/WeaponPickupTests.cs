@@ -119,7 +119,7 @@ namespace AnimeFpsGame.Tests
             var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
             var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
             weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
-            weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+            Teleport(weapons, pickup.transform.position + new Vector3(0f, 1f, 1f));
 
             yield return null;
             yield return null;
@@ -160,7 +160,7 @@ namespace AnimeFpsGame.Tests
             var targetObject = target.NetworkObject;
 
             weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
-            weapons.transform.position = target.transform.position + new Vector3(0f, 1f, 1f);
+            Teleport(weapons, target.transform.position + new Vector3(0f, 1f, 1f));
             yield return null;
             yield return null;
 
@@ -179,6 +179,18 @@ namespace AnimeFpsGame.Tests
             Assert.IsTrue(drop.IsInDropCooldown, "A fresh drop must not be instantly re-grabbable");
             Assert.IsFalse(interactor.ApplyPickupServer(drop, 0, 0),
                 "A pickup in cooldown must reject a second request");
+        }
+
+        static void Teleport(PlayerWeapons weapons, Vector3 position)
+        {
+            var body = weapons.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = position;
+            }
+
+            weapons.transform.position = position;
+            Physics.SyncTransforms();
         }
     }
 }

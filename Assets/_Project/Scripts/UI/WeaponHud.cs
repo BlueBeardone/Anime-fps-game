@@ -35,6 +35,7 @@ namespace AnimeFpsGame.UI
         GameObject previewRig;
         GameObject previewInstance;
         RenderTexture previewTexture;
+        Camera previewCamera;
         GunArchetype? previewArchetype;
 
         /// <summary>True while the pickup panel is actually on screen (false on death).</summary>
@@ -270,6 +271,7 @@ namespace AnimeFpsGame.UI
         void BuildPreview(GunArchetype archetype, WeaponDefinition definition)
         {
             EnsurePreviewRig();
+            previewCamera.enabled = true;
 
             if (previewInstance != null)
             {
@@ -331,13 +333,15 @@ namespace AnimeFpsGame.UI
             cameraObject.transform.SetParent(previewRig.transform, false);
             cameraObject.transform.localPosition = new Vector3(0f, 0f, -2.4f);
             cameraObject.transform.localRotation = Quaternion.identity;
-            var previewCamera = cameraObject.AddComponent<Camera>();
+            previewCamera = cameraObject.AddComponent<Camera>();
             previewCamera.orthographic = true;
             previewCamera.orthographicSize = 0.75f;
             previewCamera.clearFlags = CameraClearFlags.SolidColor;
             previewCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
             previewCamera.cullingMask = ~0;
             previewCamera.targetTexture = previewTexture;
+            // The rig is built hidden; BuildPreview turns the camera on for the frame that needs it.
+            previewCamera.enabled = false;
 
             var lightObject = new GameObject("PickupPreviewLight");
             lightObject.transform.SetParent(previewRig.transform, false);
@@ -385,6 +389,11 @@ namespace AnimeFpsGame.UI
             }
 
             previewArchetype = null;
+            if (previewCamera != null)
+            {
+                previewCamera.enabled = false;
+            }
+
             if (pickupPreview != null)
             {
                 pickupPreview.texture = null;

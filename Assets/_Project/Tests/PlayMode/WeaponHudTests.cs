@@ -60,14 +60,14 @@ namespace AnimeFpsGame.Tests
             movement.enabled = false;
 
             // Pickups sit near the spawn points, so step away first to prove the prompt is proximity-based.
-            weapons.transform.position = new Vector3(0f, 1f, 30f);
+            Teleport(weapons, new Vector3(0f, 1f, 30f));
             yield return null;
             yield return null;
             Assert.IsFalse(hud.PickupPromptVisible, "No prompt when nothing is close");
 
             var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
             var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
-            weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+            Teleport(weapons, pickup.transform.position + new Vector3(0f, 1f, 1f));
             yield return null;
             yield return null;
 
@@ -76,10 +76,22 @@ namespace AnimeFpsGame.Tests
             Assert.AreEqual(weapons.DefinitionFor(pickup.Archetype).displayName, hud.PickupPromptNameText);
             Assert.AreEqual(pickup.Archetype, hud.PreviewArchetype);
 
-            weapons.transform.position = new Vector3(0f, 1f, 30f);
+            Teleport(weapons, new Vector3(0f, 1f, 30f));
             yield return null;
             yield return null;
             Assert.IsFalse(hud.PickupPromptVisible, "Walking away hides the prompt");
+        }
+
+        static void Teleport(PlayerWeapons weapons, Vector3 position)
+        {
+            var body = weapons.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = position;
+            }
+
+            weapons.transform.position = position;
+            Physics.SyncTransforms();
         }
 
         [UnityTearDown]
