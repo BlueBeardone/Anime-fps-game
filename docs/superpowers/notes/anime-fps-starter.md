@@ -139,6 +139,14 @@ prefab; keep the animator parameters named the same (`Walk_status`, `K98_status`
 dependency on the WW2 pack beyond those names and mesh names. The first-person viewmodels
 are separate prefabs, so they can be replaced independently.
 
+## Weapon pickups
+
+Four guns lie on the range (Rifle, Handgun, SMG, Shotgun). Walk within 3 m and the HUD shows the
+gun's picture, its name and "Press F to switch". F swaps it into the held slot and drops the old gun
+at your feet with the exact rounds it had left. Both the ground gun and the drop are networked:
+another player cannot take the same gun. Swaps are server-authoritative, so the visible swap lands
+one RPC round-trip later.
+
 ## Known gaps (on purpose)
 
 - Movement is owner-authoritative with no client prediction or reconciliation: the owner simulates and

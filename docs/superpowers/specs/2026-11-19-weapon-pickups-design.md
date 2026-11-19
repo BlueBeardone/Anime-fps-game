@@ -1,7 +1,7 @@
 # Anime FPS Game — Weapon Pickup Design
 
 Date: 2026-11-19
-Status: approved
+Status: approved and implemented
 
 ## Intent
 
