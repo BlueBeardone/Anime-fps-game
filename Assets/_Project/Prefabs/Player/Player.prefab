@@ -116,6 +116,7 @@ GameObject:
   - component: {fileID: 1248408266948130146}
   - component: {fileID: 4340576479629155583}
   - component: {fileID: 8069260270364874723}
+  - component: {fileID: 2592488136270322763}
   - component: {fileID: 5828241535074320973}
   m_Layer: 6
   m_Name: Player
@@ -216,7 +217,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1847293047
+  GlobalObjectIdHash: 3029733726
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -510,6 +511,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 96f81e080a7f09648badcb1fd2e77687, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.UI.WeaponHud
+--- !u!114 &2592488136270322763
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6632739516172423482}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 150e3a04dc7509c4c81a90c67fe467f7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AnimeFpsGame.Runtime::AnimeFpsGame.Weapons.PlayerPickupInteractor
+  ShowTopMostFoldoutHeaderGroup: 1
+  weapons: {fileID: 1441142932560822101}
+  input: {fileID: 1126341021426941558}
+  pickupPrefab: {fileID: 7511132217243140109, guid: b546a923d03ee1b4d90dbdb8ad90778d, type: 3}
+  pickupRadius: 3
 --- !u!114 &5828241535074320973
 MonoBehaviour:
   m_ObjectHideFlags: 0

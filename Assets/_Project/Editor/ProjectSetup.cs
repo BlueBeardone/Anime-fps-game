@@ -272,6 +272,12 @@ namespace AnimeFpsGame.EditorTools
                 return;
             }
 
+            // A standalone "Build Player Prefab" run may not have the pickup prefab yet.
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(PickupPrefabPath) == null)
+            {
+                EnsurePickupPrefab();
+            }
+
             EnsureFolder(ViewsDir);
             EnsureFolder(ProjectRoot + "/Prefabs/Player");
 
@@ -369,6 +375,12 @@ namespace AnimeFpsGame.EditorTools
             SetReference(weapons, "health", health);
             SetReference(weapons, "effects", effects);
             SetReference(weapons, "input", inputReader);
+
+            var pickupInteractor = root.AddComponent<AnimeFpsGame.Weapons.PlayerPickupInteractor>();
+            SetReference(pickupInteractor, "weapons", weapons);
+            SetReference(pickupInteractor, "input", inputReader);
+            SetReference(pickupInteractor, "pickupPrefab",
+                AssetDatabase.LoadAssetAtPath<AnimeFpsGame.Weapons.WeaponPickup>(PickupPrefabPath));
 
             var respawn = root.AddComponent<PlayerRespawn>();
             SetReference(respawn, "health", health);

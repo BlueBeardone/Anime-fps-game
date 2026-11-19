@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Linq;
+using AnimeFpsGame.Player;
 using AnimeFpsGame.Weapons;
 using NUnit.Framework;
 using Unity.Netcode;
@@ -60,6 +61,71 @@ namespace AnimeFpsGame.Tests
                 var renderers = pickup.GetComponentsInChildren<Renderer>();
                 Assert.IsNotEmpty(renderers, $"{pickup.Archetype} must show a gun mesh");
             }
+        }
+
+        [Test]
+        public void FindNearestIndexPicksClosestInRange()
+        {
+            var candidates = new[]
+            {
+                new PlayerPickupInteractor.PickupCandidate(
+                    new Vector3(0f, 0f, 5f), GunArchetype.Rifle, 0f, false),
+                new PlayerPickupInteractor.PickupCandidate(
+                    new Vector3(2f, 0f, 0f), GunArchetype.Handgun, 0f, false),
+                new PlayerPickupInteractor.PickupCandidate(
+                    new Vector3(0f, 0f, 1f), GunArchetype.Rifle, 0f, false),
+            };
+
+            Assert.AreEqual(2, PlayerPickupInteractor.FindNearestIndex(
+                Vector3.zero, 3f, GunArchetype.Shotgun, 10f, candidates));
+            Assert.AreEqual(-1, PlayerPickupInteractor.FindNearestIndex(
+                Vector3.zero, 0.5f, GunArchetype.Shotgun, 10f, candidates));
+        }
+
+        [Test]
+        public void FindNearestIndexSkipsCooldownAndHeldArchetype()
+        {
+            var candidates = new[]
+            {
+                // A drop that just landed is invisible to selection for its cooldown.
+                new PlayerPickupInteractor.PickupCandidate(Vector3.forward, GunArchetype.Handgun, 9.5f, true),
+                // A scene pickup is usable at once, but this one is the archetype already held.
+                new PlayerPickupInteractor.PickupCandidate(Vector3.forward, GunArchetype.Shotgun, 0f, false),
+            };
+
+            Assert.AreEqual(-1, PlayerPickupInteractor.FindNearestIndex(
+                Vector3.zero, 3f, GunArchetype.Shotgun, 10f, candidates),
+                "One is cooling down and the other is the held archetype");
+        }
+
+        [UnityTest]
+        public IEnumerator SpawnedPlayerTracksNearestGroundGun()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            var interactor = weapons.GetComponent<PlayerPickupInteractor>();
+            Assert.IsNotNull(interactor, "The player must carry the pickup interactor");
+
+            var held = weapons.CarriedArchetype((byte)weapons.CurrentSlot);
+            var pickup = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
+            weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
+            weapons.transform.position = pickup.transform.position + new Vector3(0f, 1f, 1f);
+
+            yield return null;
+            yield return null;
+
+            Assert.AreSame(pickup, interactor.NearestPickup);
+            Assert.AreEqual(pickup.Archetype, interactor.NearestArchetype);
         }
     }
 }
