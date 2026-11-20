@@ -58,6 +58,32 @@ namespace AnimeFpsGame.Tests
         }
 
         [Test]
+        public void MuzzleFallbackUsesTheBoreNotTheGrip()
+        {
+            var viewmodel = new GameObject("Viewmodel");
+            var barrel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            barrel.name = "Barrel";
+            barrel.transform.SetParent(viewmodel.transform, false);
+            barrel.transform.localPosition = new Vector3(0f, 0f, 2f);
+            barrel.transform.localScale = Vector3.one * 0.1f;
+
+            var grip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            grip.name = "Grip";
+            grip.transform.SetParent(viewmodel.transform, false);
+            grip.transform.localPosition = new Vector3(0f, -0.5f, 0f);
+            grip.transform.localScale = Vector3.one * 0.2f;
+
+            var local = ViewmodelMuzzle.ComputeLocal(viewmodel);
+
+            Assert.AreEqual(0f, local.x, 0.001f);
+            Assert.AreEqual(0f, local.y, 0.001f,
+                "The muzzle must sit on the barrel, not the grip-heavy bounds centre");
+            Assert.AreEqual(2.05f, local.z, 0.001f);
+
+            Object.DestroyImmediate(viewmodel);
+        }
+
+        [Test]
         public void MuzzleFallbackDoesNotThrowWithoutRenderers()
         {
             var viewmodel = new GameObject("Viewmodel");

@@ -445,13 +445,11 @@ namespace AnimeFpsGame.EditorTools
             var contents = PrefabUtility.LoadPrefabContents(path);
             try
             {
-                if (!AnimeFpsGame.Player.ViewmodelMuzzle.TryComputeLocalBounds(
-                        contents, out var min, out var max))
+                if (!AnimeFpsGame.Player.ViewmodelMuzzle.TryComputeBoreLocal(contents, out var local))
                 {
                     return Vector3.zero;
                 }
 
-                var local = new Vector3((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, max.z);
                 var marker = contents.transform.Find("Muzzle");
                 if (marker == null)
                 {
