@@ -249,3 +249,5 @@ Verification:
 - `WeaponPickupTests`: 7/7 pass.
 - Full PlayMode suite: 90/90 pass.
 - `RunAll` completed with `-quit` in batchmode; pickup prefab has `NetworkTransform` (server, interpolated), each viewmodel has a `Muzzle` child, and all four player slots have non-zero muzzle positions.
+- Full PlayMode suite after review fixes: 93/93 pass.
+- Generated prefabs now keep distinct, stable GlobalObjectIdHash values across repeated RunAll passes.
