@@ -230,3 +230,22 @@ prefab's four slots have non-zero muzzle positions.
 git add Assets/_Project/Prefabs Assets/_Project/Scenes/Main.unity
 git commit -m "chore: regenerate weapon prefabs and scene"
 ```
+
+---
+
+## Execution record
+
+Executed inline on branch `fix/weapon-muzzle-physics-pickup`.
+
+- `62748bc` fix: start weapon effects at the real muzzle
+- `0ef113a` feat: throw dropped guns with physics
+- `786bd46` feat: hover picked-up guns into the hands
+- `af1075d` fix: place the weapon muzzle on the bore centreline
+- `d9fccbc` chore: regenerate weapon prefabs with muzzle and physics wiring
+
+Verification:
+
+- `ViewmodelMuzzleTests`: 5/5 pass.
+- `WeaponPickupTests`: 7/7 pass.
+- Full PlayMode suite: 90/90 pass.
+- `RunAll` completed with `-quit` in batchmode; pickup prefab has `NetworkTransform` (server, interpolated), each viewmodel has a `Muzzle` child, and all four player slots have non-zero muzzle positions.
