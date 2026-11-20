@@ -268,6 +268,14 @@ namespace AnimeFpsGame.Player
             hasPendingHover = true;
         }
 
+        /// <summary>Drops a hover/swap that will never arrive, e.g. a rejected pickup.</summary>
+        public void ClearPendingPickup()
+        {
+            hasPendingHover = false;
+            hasPendingSwap = false;
+            ClearPickupHover();
+        }
+
         public GunArchetype SwapSlotServer(byte slot, GunArchetype incoming, int magazine, int reserve)
         {
             if (!IsServer || slots == null || carriedArchetypes.Count <= slot)
@@ -547,6 +555,11 @@ namespace AnimeFpsGame.Player
 
         void OnDeathStateChanged(bool dead)
         {
+            if (dead)
+            {
+                ClearPendingPickup();
+            }
+
             ApplyDeathVisuals(dead);
         }
 
@@ -735,6 +748,8 @@ namespace AnimeFpsGame.Player
                 guns[previous]?.CancelReload();
             }
 
+            // A hover belongs to the slot that requested it; switching cancels it.
+            hasPendingHover = false;
             ApplySlot(current);
         }
 

@@ -20,6 +20,7 @@ namespace AnimeFpsGame.Weapons
         const float ThrowForwardSpeed = 4.5f;
         const float ThrowUpSpeed = 2.2f;
         const float SettleSpeed = 0.15f;
+        const float SettleAngularSpeed = 0.6f;
         const float SettleSeconds = 0.35f;
 
         static readonly List<WeaponPickup> Registry = new();
@@ -45,6 +46,7 @@ namespace AnimeFpsGame.Weapons
         BoxCollider physicsCollider;
         float stillTime;
         bool launched;
+        bool grounded;
         bool settled;
 
         public static IReadOnlyList<WeaponPickup> All
@@ -101,6 +103,7 @@ namespace AnimeFpsGame.Weapons
             EnsurePhysics();
             launched = true;
             stillTime = 0f;
+            grounded = false;
             body.isKinematic = false;
             body.useGravity = true;
             body.linearVelocity = velocity;
@@ -135,7 +138,8 @@ namespace AnimeFpsGame.Weapons
                 }
 
                 var hasBounds = false;
-                var bounds = new Bounds(transform.position, Vector3.one * 0.25f);
+                var min = Vector3.zero;
+                var max = Vector3.zero;
                 foreach (var renderer in GetComponentsInChildren<Renderer>())
                 {
                     if (!renderer.enabled)
@@ -143,19 +147,41 @@ namespace AnimeFpsGame.Weapons
                         continue;
                     }
 
-                    if (!hasBounds)
+                    // BoxCollider axes follow this root, so build the box from mesh-local corners
+                    // instead of copying a world-space AABB (which is wrong once the gun is yawed).
+                    var localBounds = renderer.localBounds;
+                    for (var corner = 0; corner < 8; corner++)
                     {
-                        bounds = renderer.bounds;
-                        hasBounds = true;
-                    }
-                    else
-                    {
-                        bounds.Encapsulate(renderer.bounds);
+                        var point = new Vector3(
+                            (corner & 1) == 0 ? localBounds.min.x : localBounds.max.x,
+                            (corner & 2) == 0 ? localBounds.min.y : localBounds.max.y,
+                            (corner & 4) == 0 ? localBounds.min.z : localBounds.max.z);
+                        var local = transform.InverseTransformPoint(
+                            renderer.transform.TransformPoint(point));
+                        if (!hasBounds)
+                        {
+                            min = local;
+                            max = local;
+                            hasBounds = true;
+                        }
+                        else
+                        {
+                            min = Vector3.Min(min, local);
+                            max = Vector3.Max(max, local);
+                        }
                     }
                 }
 
-                physicsCollider.center = transform.InverseTransformPoint(bounds.center);
-                physicsCollider.size = bounds.size;
+                if (hasBounds)
+                {
+                    physicsCollider.center = (min + max) * 0.5f;
+                    physicsCollider.size = max - min;
+                }
+                else
+                {
+                    physicsCollider.center = Vector3.zero;
+                    physicsCollider.size = Vector3.one * 0.25f;
+                }
             }
 
             physicsCollider.enabled = true;
@@ -169,16 +195,37 @@ namespace AnimeFpsGame.Weapons
                 return;
             }
 
-            if (body.linearVelocity.sqrMagnitude > SettleSpeed * SettleSpeed)
+            var slow = body.linearVelocity.sqrMagnitude <= SettleSpeed * SettleSpeed &&
+                       body.angularVelocity.sqrMagnitude <=
+                       SettleAngularSpeed * SettleAngularSpeed;
+
+            // Ground contact comes from the collision callback after the previous physics step.
+            // Requiring it keeps a gun from freezing mid-air at the top of its arc or against a wall.
+            if (slow && grounded)
+            {
+                stillTime += Time.fixedDeltaTime;
+            }
+            else
             {
                 stillTime = 0f;
-                return;
             }
 
-            stillTime += Time.fixedDeltaTime;
+            grounded = false;
             if (stillTime >= SettleSeconds)
             {
                 Settle();
+            }
+        }
+
+        void OnCollisionStay(Collision collision)
+        {
+            for (var i = 0; i < collision.contactCount; i++)
+            {
+                if (Mathf.Abs(collision.GetContact(i).normal.y) > 0.5f)
+                {
+                    grounded = true;
+                    return;
+                }
             }
         }
 

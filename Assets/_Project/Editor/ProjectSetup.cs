@@ -412,6 +412,8 @@ namespace AnimeFpsGame.EditorTools
 
             PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             Object.DestroyImmediate(root);
+            // Generated prefabs otherwise share the same fallback GlobalObjectIdHash.
+            AssignStablePrefabHash(PlayerPrefabPath);
             AssetDatabase.SaveAssets();
             Debug.Log("[ProjectSetup] Player prefab saved: " + PlayerPrefabPath);
         }
@@ -467,6 +469,46 @@ namespace AnimeFpsGame.EditorTools
             {
                 PrefabUtility.UnloadPrefabContents(contents);
             }
+        }
+
+        /// <summary>NGO derives GlobalObjectIdHash from the saved asset's global id, but a prefab
+        /// written from a temporary in-memory object gets the same fallback hash every time. Stamping
+        /// a deterministic path hash keeps every generated network prefab unique and stable across
+        /// Run All passes.</summary>
+        static uint AssignStablePrefabHash(string prefabPath)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            var networkObject = prefab != null ? prefab.GetComponent<NetworkObject>() : null;
+            if (networkObject == null)
+            {
+                return 0;
+            }
+
+            var hash = StableHash(prefabPath);
+            var serialized = new SerializedObject(networkObject);
+            var property = serialized.FindProperty("GlobalObjectIdHash");
+            if (property == null)
+            {
+                Debug.LogWarning("[ProjectSetup] NetworkObject has no GlobalObjectIdHash field");
+                return 0;
+            }
+
+            property.uintValue = hash;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(networkObject);
+            return hash;
+        }
+
+        static uint StableHash(string value)
+        {
+            var hash = 2166136261u;
+            for (var i = 0; i < value.Length; i++)
+            {
+                hash ^= value[i];
+                hash *= 16777619u;
+            }
+
+            return hash == 0 ? 1u : hash;
         }
 
         static void ConfigureSlot(SerializedProperty slot, string displayName, string animatorInt,
@@ -609,6 +651,9 @@ namespace AnimeFpsGame.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
             PrefabUtility.SaveAsPrefabAsset(root, PickupPrefabPath);
             Object.DestroyImmediate(root);
+            // Recreating the prefab in memory gives every new NetworkObject the same fallback hash.
+            // Stamp a stable per-asset hash so the pickup can never collide with the player prefab.
+            AssignStablePrefabHash(PickupPrefabPath);
             AssetDatabase.SaveAssets();
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PickupPrefabPath);

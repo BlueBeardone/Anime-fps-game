@@ -32,8 +32,32 @@ namespace AnimeFpsGame.Tests
 
             var local = ViewmodelMuzzle.ComputeLocal(viewmodel);
 
+            Assert.AreEqual(0f, local.x, 0.001f, "The bore is centred, not a corner");
+            Assert.AreEqual(0f, local.y, 0.001f, "The bore is centred, not a corner");
             Assert.AreEqual(2.05f, local.z, 0.001f,
                 "The muzzle is the most forward point of the gun's bounds");
+
+            Object.DestroyImmediate(viewmodel);
+        }
+
+        [Test]
+        public void LocalBoundsAreExpressedInViewmodelSpace()
+        {
+            var viewmodel = new GameObject("Viewmodel");
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Body";
+            body.transform.SetParent(viewmodel.transform, false);
+            body.transform.localPosition = new Vector3(0.4f, 0.3f, 2f);
+            body.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+
+            Assert.IsTrue(ViewmodelMuzzle.TryComputeLocalBounds(viewmodel, out var min, out var max));
+
+            Assert.AreEqual(0.3f, min.x, 0.001f);
+            Assert.AreEqual(0.2f, min.y, 0.001f);
+            Assert.AreEqual(1.9f, min.z, 0.001f);
+            Assert.AreEqual(0.5f, max.x, 0.001f);
+            Assert.AreEqual(0.4f, max.y, 0.001f);
+            Assert.AreEqual(2.1f, max.z, 0.001f);
 
             Object.DestroyImmediate(viewmodel);
         }

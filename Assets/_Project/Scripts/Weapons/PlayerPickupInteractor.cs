@@ -133,7 +133,13 @@ namespace AnimeFpsGame.Weapons
 
             if (IsServer)
             {
-                return ApplyPickupServer(target, outgoingMagazine, outgoingReserve, slot);
+                var applied = ApplyPickupServer(target, outgoingMagazine, outgoingReserve, slot);
+                if (!applied)
+                {
+                    weapons.ClearPendingPickup();
+                }
+
+                return applied;
             }
 
             TryPickupServerRpc(new NetworkObjectReference(target.NetworkObject), slot,

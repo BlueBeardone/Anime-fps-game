@@ -32,6 +32,47 @@ namespace AnimeFpsGame.Tests
         }
 
         [UnityTest]
+        public IEnumerator RegisteredNetworkPrefabsHaveUniqueHashes()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var manager = NetworkManager.Singleton;
+            Assert.IsNotNull(manager, "Main must contain the NetworkManager");
+            var prefabs = manager.NetworkConfig.Prefabs.Prefabs;
+            Assert.IsNotEmpty(prefabs, "The network prefab list must not be empty");
+
+            var hashes = new System.Collections.Generic.HashSet<uint>();
+            foreach (var prefab in prefabs.Where(prefab => prefab != null && prefab.Prefab != null))
+            {
+                var networkObject = prefab.Prefab.GetComponent<NetworkObject>();
+                Assert.IsNotNull(networkObject, $"{prefab.Prefab.name} must be a network object");
+                Assert.IsTrue(hashes.Add(networkObject.PrefabIdHash),
+                    $"{prefab.Prefab.name} reuses a GlobalObjectIdHash; dynamic spawns would resolve wrongly");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator PickupPrefabReplicatesWithServerAuthority()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var manager = NetworkManager.Singleton;
+            var pickupPrefab = manager.NetworkConfig.Prefabs.Prefabs
+                .Select(p => p.Prefab)
+                .First(p => p != null && p.GetComponent<WeaponPickup>() != null);
+            var networkTransform = pickupPrefab.GetComponent<Unity.Netcode.Components.NetworkTransform>();
+
+            Assert.IsNotNull(networkTransform, "A thrown pickup needs a NetworkTransform");
+            Assert.AreEqual(Unity.Netcode.Components.NetworkTransform.AuthorityModes.Server,
+                networkTransform.AuthorityMode, "The server throws and settles the drop");
+            Assert.IsTrue(networkTransform.Interpolate, "Clients must see a smooth throw");
+        }
+
+        [UnityTest]
         public IEnumerator MainHasFourDistinctGroundGuns()
         {
             SceneManager.LoadScene("Main");
@@ -203,13 +244,17 @@ namespace AnimeFpsGame.Tests
             Assert.IsNotNull(body, "A thrown drop must be a physics object");
             Assert.Greater(drop.transform.position.y, 0.5f, "The drop must start above the ground");
 
-            yield return new WaitForSeconds(1.5f);
+            yield return new WaitForSeconds(2.5f);
 
             Assert.IsNotNull(drop, "The drop must survive landing");
             Assert.Greater(drop.transform.position.y, -0.05f,
                 "The drop must never sink through the ground");
             Assert.Less(drop.transform.position.y, 1f,
                 "The drop must come to rest on the ground");
+            Assert.IsTrue(body.isKinematic, "A settled drop must stop simulating");
+            var collider = drop.GetComponent<BoxCollider>();
+            Assert.IsNotNull(collider, "A thrown drop needs a physics collider");
+            Assert.IsFalse(collider.enabled, "A settled gun must not block the player");
         }
 
         [UnityTest]
@@ -244,12 +289,16 @@ namespace AnimeFpsGame.Tests
                 "The picked-up gun must start away from the hand");
             Assert.IsNotNull(weapons.CurrentViewmodel);
 
+            var definition = weapons.DefinitionFor(weapons.CarriedArchetype(slot));
+            var basePosition = definition.viewmodelLocalPosition;
+            Assert.Greater(
+                Vector3.Distance(weapons.CurrentViewmodel.transform.localPosition, basePosition),
+                0.1f, "The first hover frame must still be travelling toward the hand");
+
             yield return new WaitForSeconds(0.6f);
 
             Assert.IsFalse(weapons.PickupHoverActive, "The hover must finish");
 
-            var definition = weapons.DefinitionFor(weapons.CarriedArchetype(slot));
-            var basePosition = definition.viewmodelLocalPosition;
             Assert.Less(
                 Vector3.Distance(weapons.CurrentViewmodel.transform.localPosition, basePosition),
                 0.02f, "The gun must settle in the hands");
