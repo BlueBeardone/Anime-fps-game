@@ -217,7 +217,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3029733726
+  GlobalObjectIdHash: 1751889033
   InScenePlacedSourceGlobalObjectIdHash: 0
   m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
@@ -437,6 +437,7 @@ MonoBehaviour:
     viewmodelLocalPosition: {x: 0.24, y: -0.22, z: 0.48}
     viewmodelLocalEuler: {x: 0, y: 0, z: 0}
     viewmodelScale: 0.5
+    muzzleLocalPosition: {x: -0.016119147, y: 0.06284635, z: 0.82127345}
     stats: {fileID: 11400000, guid: b4f95c9b17ceb7f46b40e928f0889b02, type: 2}
   - displayName: Handgun
     animatorInt: Status_LugerP08
@@ -445,6 +446,7 @@ MonoBehaviour:
     viewmodelLocalPosition: {x: 0.2, y: -0.18, z: 0.38}
     viewmodelLocalEuler: {x: 0, y: 0, z: 0}
     viewmodelScale: 0.5
+    muzzleLocalPosition: {x: 0.00069381687, y: 0.14162691, z: 0.2244944}
     stats: {fileID: 11400000, guid: 5481cf13e9c63b34a9c0f5c8ed2d67c0, type: 2}
   - displayName: SMG
     animatorInt: status_MP40
@@ -453,6 +455,7 @@ MonoBehaviour:
     viewmodelLocalPosition: {x: 0.22, y: -0.2, z: 0.45}
     viewmodelLocalEuler: {x: 0, y: 0, z: 0}
     viewmodelScale: 0.5
+    muzzleLocalPosition: {x: -0.021332584, y: -0.041133776, z: 0.2912456}
     stats: {fileID: 11400000, guid: 71bd69ce74c15be4684f2f0c5b04e1e8, type: 2}
   - displayName: Shotgun
     animatorInt: status_k98
@@ -461,6 +464,7 @@ MonoBehaviour:
     viewmodelLocalPosition: {x: 0.24, y: -0.22, z: 0.48}
     viewmodelLocalEuler: {x: 0, y: 0, z: 0}
     viewmodelScale: 0.5
+    muzzleLocalPosition: {x: -0.016119147, y: 0.06284635, z: 0.82127345}
     stats: {fileID: 11400000, guid: f644a63b36794784ebd928da2ea75fdc, type: 2}
   viewmodelAnchor: {fileID: 7625127871244334510}
   visualsRoot: {fileID: 1795611954203430652}
