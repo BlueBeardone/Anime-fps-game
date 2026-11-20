@@ -60,7 +60,19 @@ namespace AnimeFpsGame.Tests
                 Assert.Greater(pickup.MagazineAmmo, 0, $"{pickup.Archetype} must have loaded rounds");
                 var renderers = pickup.GetComponentsInChildren<Renderer>();
                 Assert.IsNotEmpty(renderers, $"{pickup.Archetype} must show a gun mesh");
+                Assert.IsNull(pickup.GetComponent<Rigidbody>(),
+                    "Scene pickups stay static; only thrown drops are physical");
             }
+        }
+
+        [Test]
+        public void ThrowVelocityGoesForwardAndUp()
+        {
+            var velocity = WeaponPickup.ThrowVelocity(Vector3.forward);
+
+            Assert.Greater(velocity.z, 3f, "The throw must carry the gun forward");
+            Assert.Greater(velocity.y, 1f, "The throw must have some lift");
+            Assert.AreEqual(0f, velocity.x, 0.001f);
         }
 
         [Test]
@@ -186,6 +198,18 @@ namespace AnimeFpsGame.Tests
             Assert.IsTrue(drop.IsInDropCooldown, "A fresh drop must not be instantly re-grabbable");
             Assert.IsFalse(interactor.ApplyPickupServer(drop, 0, 0),
                 "A pickup in cooldown must reject a second request");
+
+            var body = drop.GetComponent<Rigidbody>();
+            Assert.IsNotNull(body, "A thrown drop must be a physics object");
+            Assert.Greater(drop.transform.position.y, 0.5f, "The drop must start above the ground");
+
+            yield return new WaitForSeconds(1.5f);
+
+            Assert.IsNotNull(drop, "The drop must survive landing");
+            Assert.Greater(drop.transform.position.y, -0.05f,
+                "The drop must never sink through the ground");
+            Assert.Less(drop.transform.position.y, 1f,
+                "The drop must come to rest on the ground");
         }
 
         static void Teleport(PlayerWeapons weapons, Vector3 position)

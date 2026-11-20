@@ -573,6 +573,9 @@ namespace AnimeFpsGame.EditorTools
 
             var root = new GameObject("WeaponPickup");
             root.AddComponent<NetworkObject>();
+            var networkTransform = root.AddComponent<NetworkTransform>();
+            networkTransform.AuthorityMode = NetworkTransform.AuthorityModes.Server;
+            networkTransform.Interpolate = true;
             var pickup = root.AddComponent<AnimeFpsGame.Weapons.WeaponPickup>();
 
             var serialized = new SerializedObject(pickup);

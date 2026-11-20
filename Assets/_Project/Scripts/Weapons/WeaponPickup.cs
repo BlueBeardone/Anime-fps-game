@@ -17,6 +17,11 @@ namespace AnimeFpsGame.Weapons
     {
         public const float DropCooldownSeconds = 0.75f;
 
+        const float ThrowForwardSpeed = 4.5f;
+        const float ThrowUpSpeed = 2.2f;
+        const float SettleSpeed = 0.15f;
+        const float SettleSeconds = 0.35f;
+
         static readonly List<WeaponPickup> Registry = new();
 
         [SerializeField] GunArchetype initialArchetype = GunArchetype.Rifle;
@@ -36,6 +41,11 @@ namespace AnimeFpsGame.Weapons
         int pendingMagazine;
         int pendingReserve;
         GameObject visual;
+        Rigidbody body;
+        BoxCollider physicsCollider;
+        float stillTime;
+        bool launched;
+        bool settled;
 
         public static IReadOnlyList<WeaponPickup> All
         {
@@ -66,6 +76,123 @@ namespace AnimeFpsGame.Weapons
             pendingArchetype = value;
             pendingMagazine = magazine;
             pendingReserve = reserve;
+        }
+
+        /// <summary>Forward and upward throw shared by the server launch and the drop tests.</summary>
+        public static Vector3 ThrowVelocity(Vector3 flatForward)
+        {
+            flatForward.y = 0f;
+            if (flatForward.sqrMagnitude < 0.0001f)
+            {
+                flatForward = Vector3.forward;
+            }
+
+            return flatForward.normalized * ThrowForwardSpeed + Vector3.up * ThrowUpSpeed;
+        }
+
+        /// <summary>Server-only: turns a runtime drop into a physical object and throws it.</summary>
+        public void Launch(Vector3 velocity)
+        {
+            if (!IsServer || !IsSpawned || settled)
+            {
+                return;
+            }
+
+            EnsurePhysics();
+            launched = true;
+            stillTime = 0f;
+            body.isKinematic = false;
+            body.useGravity = true;
+            body.linearVelocity = velocity;
+            body.angularVelocity = UnityEngine.Random.insideUnitSphere * 5f;
+            body.WakeUp();
+        }
+
+        void EnsurePhysics()
+        {
+            if (body == null)
+            {
+                body = gameObject.GetComponent<Rigidbody>();
+                if (body == null)
+                {
+                    body = gameObject.AddComponent<Rigidbody>();
+                }
+
+                body.mass = 1f;
+                body.linearDamping = 0.4f;
+                body.angularDamping = 1.5f;
+                body.useGravity = true;
+                body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                body.interpolation = RigidbodyInterpolation.Interpolate;
+            }
+
+            if (physicsCollider == null)
+            {
+                physicsCollider = gameObject.GetComponent<BoxCollider>();
+                if (physicsCollider == null)
+                {
+                    physicsCollider = gameObject.AddComponent<BoxCollider>();
+                }
+
+                var hasBounds = false;
+                var bounds = new Bounds(transform.position, Vector3.one * 0.25f);
+                foreach (var renderer in GetComponentsInChildren<Renderer>())
+                {
+                    if (!renderer.enabled)
+                    {
+                        continue;
+                    }
+
+                    if (!hasBounds)
+                    {
+                        bounds = renderer.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(renderer.bounds);
+                    }
+                }
+
+                physicsCollider.center = transform.InverseTransformPoint(bounds.center);
+                physicsCollider.size = bounds.size;
+            }
+
+            physicsCollider.enabled = true;
+        }
+
+        void FixedUpdate()
+        {
+            // Only the server simulates a throw; clients follow the NetworkTransform.
+            if (!IsServer || !launched || settled || body == null)
+            {
+                return;
+            }
+
+            if (body.linearVelocity.sqrMagnitude > SettleSpeed * SettleSpeed)
+            {
+                stillTime = 0f;
+                return;
+            }
+
+            stillTime += Time.fixedDeltaTime;
+            if (stillTime >= SettleSeconds)
+            {
+                Settle();
+            }
+        }
+
+        void Settle()
+        {
+            settled = true;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.isKinematic = true;
+            if (physicsCollider != null)
+            {
+                // A rest gun must never block or push a player.
+                physicsCollider.enabled = false;
+            }
         }
 
         public override void OnNetworkSpawn()

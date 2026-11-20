@@ -235,10 +235,19 @@ namespace AnimeFpsGame.Weapons
                 forward = Vector3.forward;
             }
 
-            var drop = Instantiate(pickupPrefab, transform.position + forward.normalized * 0.75f,
-                Quaternion.identity);
+            // Throw from chest height so the gun clears the ground and reads as leaving the hands.
+            var spawn = transform.position + Vector3.up * 1.2f + forward.normalized * 0.5f;
+            if (Physics.Raycast(spawn + Vector3.up * 0.1f, Vector3.down, out var ground, 3f, ~0,
+                    QueryTriggerInteraction.Ignore))
+            {
+                spawn.y = Mathf.Max(spawn.y, ground.point.y + 0.2f);
+            }
+
+            var drop = Instantiate(pickupPrefab, spawn,
+                Quaternion.LookRotation(forward.normalized, Vector3.up));
             drop.Initialize(archetype, magazine, reserve);
             drop.NetworkObject.Spawn();
+            drop.Launch(WeaponPickup.ThrowVelocity(forward));
         }
     }
 }
