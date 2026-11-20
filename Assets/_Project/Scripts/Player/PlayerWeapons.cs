@@ -56,6 +56,12 @@ namespace AnimeFpsGame.Player
         float viewmodelKickBack;
         float viewmodelKickUp;
         float lastScrollTime;
+        Vector3 pendingHoverWorldPosition;
+        float pendingHoverExpiry;
+        bool hasPendingHover;
+        Vector3 pickupHoverStartLocal;
+        float pickupHoverRemaining;
+        bool pickupHoverActive;
         float[] serverNextShotTime;
         float serverNextAnyShotTime;
 
@@ -66,6 +72,9 @@ namespace AnimeFpsGame.Player
         public int SlotCount => slots?.Length ?? 0;
         public GameObject CurrentViewmodel => currentViewmodel;
         public bool IsDead => health != null && health.IsDead;
+        public bool PickupHoverActive => pickupHoverActive;
+
+        public const float PickupHoverSeconds = 0.3f;
 
         public Vector3 MuzzleWorldPosition
         {
@@ -248,6 +257,15 @@ namespace AnimeFpsGame.Player
             pendingSwapMagazine = magazine;
             pendingSwapReserve = reserve;
             hasPendingSwap = true;
+        }
+
+        /// <summary>Owner-side: remembers where the ground gun was so the incoming viewmodel can
+        /// fly from there into the hands when the networked swap arrives.</summary>
+        public void SetPendingPickupHover(Vector3 worldPosition)
+        {
+            pendingHoverWorldPosition = worldPosition;
+            pendingHoverExpiry = Time.time + 2f;
+            hasPendingHover = true;
         }
 
         public GunArchetype SwapSlotServer(byte slot, GunArchetype incoming, int magazine, int reserve)
@@ -590,6 +608,33 @@ namespace AnimeFpsGame.Player
             }
         }
 
+        void StartPickupHover(Vector3 worldPosition)
+        {
+            if (currentViewmodel == null || PickupHoverSeconds <= 0f)
+            {
+                return;
+            }
+
+            var parent = currentViewmodel.transform.parent;
+            if (parent == null)
+            {
+                return;
+            }
+
+            var local = parent.InverseTransformPoint(worldPosition);
+            // A gun picked up at the feet can sit behind the near plane; keep the travel visible.
+            local.z = Mathf.Max(local.z, 0.2f);
+            pickupHoverStartLocal = local;
+            pickupHoverRemaining = PickupHoverSeconds;
+            pickupHoverActive = true;
+        }
+
+        void ClearPickupHover()
+        {
+            pickupHoverActive = false;
+            pickupHoverRemaining = 0f;
+        }
+
         void UpdateViewmodelFeel()
         {
             viewmodelKickBack = Mathf.Lerp(viewmodelKickBack, 0f, 12f * Time.deltaTime);
@@ -597,6 +642,7 @@ namespace AnimeFpsGame.Player
 
             if (currentViewmodel == null)
             {
+                ClearPickupHover();
                 return;
             }
 
@@ -608,10 +654,29 @@ namespace AnimeFpsGame.Player
                 ? Mathf.Sin(gun.BoltCycleProgress01 * Mathf.PI)
                 : 0f;
 
-            currentViewmodel.transform.localPosition = viewmodelBasePosition + new Vector3(
+            var targetPosition = viewmodelBasePosition + new Vector3(
                 0f,
                 -0.06f * reload01 - 0.02f * bolt01,
                 -viewmodelKickBack - 0.03f * reload01);
+
+            if (pickupHoverActive)
+            {
+                pickupHoverRemaining -= Time.deltaTime;
+                var progress = 1f - Mathf.Clamp01(pickupHoverRemaining / PickupHoverSeconds);
+                var eased = 1f - (1f - progress) * (1f - progress);
+                currentViewmodel.transform.localPosition =
+                    Vector3.LerpUnclamped(pickupHoverStartLocal, targetPosition, eased);
+
+                if (pickupHoverRemaining <= 0f)
+                {
+                    pickupHoverActive = false;
+                    currentViewmodel.transform.localPosition = targetPosition;
+                }
+            }
+            else
+            {
+                currentViewmodel.transform.localPosition = targetPosition;
+            }
 
             currentViewmodel.transform.localRotation = Quaternion.Euler(
                 viewmodelBaseEuler + new Vector3(-viewmodelKickUp + 25f * reload01 - 8f * bolt01, 0f, 0f));
@@ -686,6 +751,8 @@ namespace AnimeFpsGame.Player
                 definition = slots[Mathf.Clamp(slot, 0, slots.Length - 1)];
             }
 
+            ClearPickupHover();
+
             if (currentViewmodel != null)
             {
                 Destroy(currentViewmodel);
@@ -702,6 +769,15 @@ namespace AnimeFpsGame.Player
                 muzzleLocal = definition.muzzleLocalPosition.sqrMagnitude > 0.000001f
                     ? definition.muzzleLocalPosition
                     : ViewmodelMuzzle.ComputeLocal(currentViewmodel);
+
+                if (hasPendingHover && Time.time <= pendingHoverExpiry &&
+                    definition.stats != null && definition.stats.stats != null &&
+                    definition.stats.stats.archetype == pendingSwapArchetype)
+                {
+                    StartPickupHover(pendingHoverWorldPosition);
+                    hasPendingHover = false;
+                }
+
                 // Switching slots while dead must not bring the gun back on screen.
                 currentViewmodel.SetActive(!IsDead);
             }

@@ -126,6 +126,7 @@ namespace AnimeFpsGame.Weapons
 
             var slot = (byte)weapons.CurrentSlot;
             weapons.SetPendingPickupAmmo(slot, target.Archetype, target.MagazineAmmo, target.ReserveAmmo);
+            weapons.SetPendingPickupHover(target.transform.position);
 
             var outgoingMagazine = weapons.ActiveGun.AmmoInMagazine;
             var outgoingReserve = weapons.ActiveGun.ReserveAmmo;

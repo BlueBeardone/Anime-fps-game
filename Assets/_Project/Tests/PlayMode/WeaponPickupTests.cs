@@ -212,6 +212,49 @@ namespace AnimeFpsGame.Tests
                 "The drop must come to rest on the ground");
         }
 
+        [UnityTest]
+        public IEnumerator PickedUpGunHoversFromTheGroundIntoTheHands()
+        {
+            SceneManager.LoadScene("Main");
+            yield return null;
+            yield return null;
+
+            var deadline = Time.realtimeSinceStartup + 15f;
+            PlayerWeapons weapons = null;
+            while ((weapons == null || !weapons.IsSpawned) && Time.realtimeSinceStartup < deadline)
+            {
+                weapons = Object.FindAnyObjectByType<PlayerWeapons>();
+                yield return null;
+            }
+
+            var interactor = weapons.GetComponent<PlayerPickupInteractor>();
+            var slot = (byte)weapons.CurrentSlot;
+            var held = weapons.CarriedArchetype(slot);
+            var target = WeaponPickup.All.First(p => p.IsSpawned && p.Archetype != held);
+
+            weapons.GetComponent<AnimeFpsGame.Movement.CharacterMovement>().enabled = false;
+            Teleport(weapons, target.transform.position + new Vector3(0f, 1f, 1f));
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(interactor.TryPickup(target));
+            yield return null;
+
+            Assert.IsTrue(weapons.PickupHoverActive,
+                "The picked-up gun must start away from the hand");
+            Assert.IsNotNull(weapons.CurrentViewmodel);
+
+            yield return new WaitForSeconds(0.6f);
+
+            Assert.IsFalse(weapons.PickupHoverActive, "The hover must finish");
+
+            var definition = weapons.DefinitionFor(weapons.CarriedArchetype(slot));
+            var basePosition = definition.viewmodelLocalPosition;
+            Assert.Less(
+                Vector3.Distance(weapons.CurrentViewmodel.transform.localPosition, basePosition),
+                0.02f, "The gun must settle in the hands");
+        }
+
         static void Teleport(PlayerWeapons weapons, Vector3 position)
         {
             var body = weapons.GetComponent<Rigidbody>();
