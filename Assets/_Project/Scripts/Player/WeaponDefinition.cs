@@ -17,6 +17,10 @@ namespace AnimeFpsGame.Player
         public Vector3 viewmodelLocalPosition = new Vector3(0.22f, -0.2f, 0.45f);
         public Vector3 viewmodelLocalEuler = new Vector3(0f, 90f, 0f);
         public float viewmodelScale = 0.08f;
+
+        /// <summary>Barrel tip in viewmodel-root local space. Effects and tracers start here.
+        /// Zero falls back to a child named Muzzle or the combined bounds' forward centre.</summary>
+        public Vector3 muzzleLocalPosition;
         public GunStatsAsset stats;
     }
 }

@@ -699,7 +699,9 @@ namespace AnimeFpsGame.Player
                 currentViewmodel.transform.localPosition = viewmodelBasePosition;
                 currentViewmodel.transform.localRotation = Quaternion.Euler(viewmodelBaseEuler);
                 currentViewmodel.transform.localScale = Vector3.one * definition.viewmodelScale;
-                muzzleLocal = ViewmodelMuzzle.ComputeLocal(currentViewmodel);
+                muzzleLocal = definition.muzzleLocalPosition.sqrMagnitude > 0.000001f
+                    ? definition.muzzleLocalPosition
+                    : ViewmodelMuzzle.ComputeLocal(currentViewmodel);
                 // Switching slots while dead must not bring the gun back on screen.
                 currentViewmodel.SetActive(!IsDead);
             }

@@ -39,6 +39,25 @@ namespace AnimeFpsGame.Tests
         }
 
         [Test]
+        public void MuzzleFallbackUsesTheForwardCentreNotACorner()
+        {
+            var viewmodel = new GameObject("Viewmodel");
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Body";
+            body.transform.SetParent(viewmodel.transform, false);
+            body.transform.localPosition = new Vector3(0.4f, 0.3f, 2f);
+            body.transform.localScale = new Vector3(0.2f, 0.2f, 0.2f);
+
+            var local = ViewmodelMuzzle.ComputeLocal(viewmodel);
+
+            Assert.AreEqual(0.4f, local.x, 0.001f);
+            Assert.AreEqual(0.3f, local.y, 0.001f);
+            Assert.AreEqual(2.1f, local.z, 0.001f);
+
+            Object.DestroyImmediate(viewmodel);
+        }
+
+        [Test]
         public void MuzzleFallbackDoesNotThrowWithoutRenderers()
         {
             var viewmodel = new GameObject("Viewmodel");

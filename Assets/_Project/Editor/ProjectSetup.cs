@@ -284,6 +284,9 @@ namespace AnimeFpsGame.EditorTools
             var k98Viewmodel = EnsureViewmodel("K98_prefab.prefab", "K98_Viewmodel.prefab");
             var lugerViewmodel = EnsureViewmodel("LugerP08_prefab.prefab", "LugerP08_Viewmodel.prefab");
             var mp40Viewmodel = EnsureViewmodel("MP40_prefab.prefab", "MP40_Viewmodel.prefab");
+            var k98Muzzle = EnsureViewmodelMuzzle(k98Viewmodel);
+            var lugerMuzzle = EnsureViewmodelMuzzle(lugerViewmodel);
+            var mp40Muzzle = EnsureViewmodelMuzzle(mp40Viewmodel);
 
             var rifleStats = EnsureGunStatsAsset("Rifle", Rifle.CreateDefaultStats());
             var handgunStats = EnsureGunStatsAsset("Handgun", Handgun.CreateDefaultStats());
@@ -396,13 +399,13 @@ namespace AnimeFpsGame.EditorTools
             var slots = weaponsSerialized.FindProperty("slots");
             slots.arraySize = 4;
             ConfigureSlot(slots.GetArrayElementAtIndex(0), "Rifle", "status_k98", "K98", k98Viewmodel,
-                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, rifleStats);
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, k98Muzzle, rifleStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(1), "Handgun", "Status_LugerP08", "Luger_P08", lugerViewmodel,
-                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 0f, 0f), 0.5f, handgunStats);
+                new Vector3(0.2f, -0.18f, 0.38f), new Vector3(0f, 0f, 0f), 0.5f, lugerMuzzle, handgunStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(2), "SMG", "status_MP40", "MP40", mp40Viewmodel,
-                new Vector3(0.22f, -0.2f, 0.45f), new Vector3(0f, 0f, 0f), 0.5f, smgStats);
+                new Vector3(0.22f, -0.2f, 0.45f), new Vector3(0f, 0f, 0f), 0.5f, mp40Muzzle, smgStats);
             ConfigureSlot(slots.GetArrayElementAtIndex(3), "Shotgun", "status_k98", "K98", k98Viewmodel,
-                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, shotgunStats);
+                new Vector3(0.24f, -0.22f, 0.48f), new Vector3(0f, 0f, 0f), 0.5f, k98Muzzle, shotgunStats);
             weaponsSerialized.ApplyModifiedPropertiesWithoutUndo();
 
             SetLayerRecursively(root, playerLayer);
@@ -429,9 +432,48 @@ namespace AnimeFpsGame.EditorTools
             return AssetDatabase.LoadAssetAtPath<GameObject>(target);
         }
 
+        /// <summary>Adds or moves a direct child named Muzzle at the bore centre so the gun prefab
+        /// carries an inspectable reference for flash and tracer origins.</summary>
+        static Vector3 EnsureViewmodelMuzzle(GameObject viewmodel)
+        {
+            if (viewmodel == null)
+            {
+                return Vector3.zero;
+            }
+
+            var path = AssetDatabase.GetAssetPath(viewmodel);
+            var contents = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (!AnimeFpsGame.Player.ViewmodelMuzzle.TryComputeLocalBounds(
+                        contents, out var min, out var max))
+                {
+                    return Vector3.zero;
+                }
+
+                var local = new Vector3((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f, max.z);
+                var marker = contents.transform.Find("Muzzle");
+                if (marker == null)
+                {
+                    marker = new GameObject("Muzzle").transform;
+                    marker.SetParent(contents.transform, false);
+                }
+
+                marker.localPosition = local;
+                marker.localRotation = Quaternion.identity;
+                marker.localScale = Vector3.one;
+                PrefabUtility.SaveAsPrefabAsset(contents, path);
+                return local;
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(contents);
+            }
+        }
+
         static void ConfigureSlot(SerializedProperty slot, string displayName, string animatorInt,
             string meshName, GameObject viewmodel, Vector3 position, Vector3 euler, float scale,
-            GunStatsAsset stats)
+            Vector3 muzzleLocalPosition, GunStatsAsset stats)
         {
             slot.FindPropertyRelative("displayName").stringValue = displayName;
             slot.FindPropertyRelative("animatorInt").stringValue = animatorInt;
@@ -440,6 +482,7 @@ namespace AnimeFpsGame.EditorTools
             slot.FindPropertyRelative("viewmodelLocalPosition").vector3Value = position;
             slot.FindPropertyRelative("viewmodelLocalEuler").vector3Value = euler;
             slot.FindPropertyRelative("viewmodelScale").floatValue = scale;
+            slot.FindPropertyRelative("muzzleLocalPosition").vector3Value = muzzleLocalPosition;
             slot.FindPropertyRelative("stats").objectReferenceValue = stats;
         }
 
